@@ -609,7 +609,7 @@ public final class RealWorldAPI {
                             )
                         )
                         FROM realworld.article
-                        WHERE 1 = 1
+                        WHERE deleted = false
                 """, Arrays.asList(userId, userId)));
 
         urlParameters.firstValue("tag").ifPresent(tag -> {
@@ -785,7 +785,7 @@ public final class RealWorldAPI {
                              )
                          ))
                      FROM realworld.article
-                     WHERE slug = ?
+                     WHERE deleted = false AND slug = ?
                      """)) {
             stmt.setObject(1, userId);
             stmt.setObject(2, userId);
@@ -942,7 +942,7 @@ public final class RealWorldAPI {
                             )
                         ))
                     FROM realworld.article
-                    WHERE id = ?
+                    WHERE deleted = false AND id = ?
                     """)) {
                 stmt.setObject(1, userId);
                 stmt.setObject(2, userId);
@@ -1080,7 +1080,7 @@ public final class RealWorldAPI {
                              )
                          ))
                      FROM realworld.article
-                     WHERE id = ?
+                     WHERE deleted = false AND id = ?
                      """)) {
                 stmt.setObject(1, userId);
                 stmt.setObject(2, userId);
@@ -1098,14 +1098,15 @@ public final class RealWorldAPI {
         }
     }
 
-    @Route(methods = "DELETE", pattern = "/api/articles/(?<slug>.+)", auth = Route.Auth.REQUIRED)
+    @Route(methods = "DELETE", pattern = "/api/articles/(?<slug>[a-zA-Z0-9-_]+)", auth = Route.Auth.REQUIRED)
     void deleteArticleHandler(HttpExchange exchange) throws IOException {
         var userId = ((AuthContext) exchange.getAttribute("authContext")).userId;
         var slug = RouteParams.get(exchange).param("slug").orElseThrow();
 
         try (var conn = db.getConnection();
              var stmt = conn.prepareStatement("""
-                   DELETE FROM realworld.article
+                   UPDATE realworld.article
+                       SET deleted = true
                    WHERE user_id = ? AND slug = ?
                    """)) {
             stmt.setObject(1, userId);
@@ -1134,29 +1135,411 @@ public final class RealWorldAPI {
         }
     }
 
-    @Route(methods = "POST", pattern = "/api/articles/(?<slug>.+)/comments", auth = Route.Auth.REQUIRED)
+    @Route(methods = "POST", pattern = "/api/articles/(?<slug>[a-zA-Z0-9-_]+)/comments", auth = Route.Auth.REQUIRED)
     void addCommentsToArticleHandler(HttpExchange exchange) throws IOException {
+        var userId = ((AuthContext) exchange.getAttribute("authContext")).userId;
+        var slug = RouteParams.get(exchange).param("slug").orElseThrow();
 
+        var body = field(readBody(exchange), "comment", field("body", string()));
+
+        try (var conn = db.getConnection()) {
+            UUID articleId;
+            try (var stmt = conn.prepareStatement("""
+                   SELECT id
+                   FROM realworld.article
+                   WHERE slug = ?
+                   """)) {
+                stmt.setObject(1, slug);
+                var rs = stmt.executeQuery();
+                if (!rs.next()) {
+                    HttpExchanges.sendResponse(
+                            exchange,
+                            401,
+                            JsonBody.of(
+                                    Json.objectBuilder()
+                                            .put("errors", Json.objectBuilder()
+                                                    .put("body", Json.arrayBuilder()
+                                                            .add("No matching article")))
+                            )
+                    );
+                    return;
+                }
+
+                articleId = rs.getObject("id", UUID.class);
+            }
+            try (var stmt = conn.prepareStatement("""
+                   INSERT INTO realworld.comment(article_id, user_id, body)
+                   VALUES (?, ?, ?)
+                   RETURNING id
+                   """)) {
+                stmt.setObject(1, articleId);
+                stmt.setObject(2, userId);
+                stmt.setString(3, body);
+
+            }
+            try (var stmt = conn.prepareStatement("""
+                    SELECT
+                        jsonb_build_object(
+                            'comments', array(
+                                SELECT jsonb_build_object(
+                                    'id', realworld.comment.id,
+                                    'createdAt', realworld.comment.created_at,
+                                    'updatedAt', realworld.comment.updated_at,
+                                    'body', realworld.comment.body,
+                                    'author', (
+                                        SELECT jsonb_build_object(
+                                            'username', realworld."user".username,
+                                            'bio', realworld."user".bio,
+                                            'image', realworld."user".image,
+                                            'following', exists(
+                                                 SELECT id
+                                                 FROM realworld.follow
+                                                 WHERE from_user_id = ? AND to_user_id = realworld."user".id
+                                             )
+                                        )
+                                        FROM realworld."user"
+                                        WHERE realworld."user".id = realworld.comment.user_id
+                                    )
+                                )
+                                FROM realworld.comment
+                                WHERE realworld.comment.article_id = realworld.article.id
+                            )
+                        )
+                    FROM realworld.article WHERE realworld.article.id = ?
+                    """)) {
+                stmt.setObject(1, userId);
+                stmt.setObject(2, articleId);
+
+                var rs = stmt.executeQuery();
+                rs.next();
+
+                HttpExchanges.sendResponse(exchange, 200, JsonBody.of(
+                        Json.read(rs.getObject(1).toString())
+                ));
+            }
+
+        } catch (SQLException e) {
+            throw new UncheckedSQLException(e);
+        }
     }
 
-    @Route(methods = "GET", pattern = "/api/articles/(?<slug>.+)/comments", auth = Route.Auth.OPTIONAL)
+    @Route(methods = "GET", pattern = "/api/articles/(?<slug>[a-zA-Z0-9-_]+)/comments", auth = Route.Auth.OPTIONAL)
     void getCommentsFromArticleHandler(HttpExchange exchange) throws IOException {
+        UUID userId;
+        if (exchange.getAttribute("authContext") instanceof AuthContext authContext) {
+            userId = authContext.userId;
+        } else {
+            userId = null;
+        }
 
+        var slug = RouteParams.get(exchange).param("slug").orElseThrow();
+
+        try (var conn = db.getConnection();
+             var stmt = conn.prepareStatement("""
+                SELECT
+                    jsonb_build_object(
+                        'comments', array(
+                            SELECT jsonb_build_object(
+                                'id', realworld.comment.id,
+                                'createdAt', realworld.comment.created_at,
+                                'updatedAt', realworld.comment.updated_at,
+                                'body', realworld.comment.body,
+                                'author', (
+                                    SELECT jsonb_build_object(
+                                        'username', realworld."user".username,
+                                        'bio', realworld."user".bio,
+                                        'image', realworld."user".image,
+                                        'following', exists(
+                                             SELECT id
+                                             FROM realworld.follow
+                                             WHERE from_user_id = ? AND to_user_id = realworld."user".id
+                                         )
+                                    )
+                                    FROM realworld."user"
+                                    WHERE realworld."user".id = realworld.comment.user_id
+                                )
+                            )
+                            FROM realworld.comment
+                            WHERE realworld.comment.article_id = realworld.article.id
+                        )
+                    )
+                FROM realworld.article WHERE realworld.article.slug = ?
+                """)) {
+            stmt.setObject(1, userId);
+            stmt.setString(2, slug);
+
+            var rs = stmt.executeQuery();
+
+            if (!rs.next()) {
+                HttpExchanges.sendResponse(
+                        exchange,
+                        401,
+                        JsonBody.of(
+                                Json.objectBuilder()
+                                        .put("errors", Json.objectBuilder()
+                                                .put("body", Json.arrayBuilder()
+                                                        .add("No matching article")))
+                        )
+                );
+                return;
+            }
+
+            HttpExchanges.sendResponse(exchange, 200, JsonBody.of(
+                    Json.read(rs.getObject(1).toString())
+            ));
+        } catch (SQLException e) {
+            throw new UncheckedSQLException(e);
+        }
     }
 
-    @Route(methods = "DELETE", pattern = "/api/articles/(?<slug>.+)/comments/(?<id>.+)", auth = Route.Auth.REQUIRED)
+    @Route(methods = "DELETE", pattern = "/api/articles/(?<slug>[a-zA-Z0-9-_]+)/comments/(?<commentId>[a-zA-Z0-9-_]+)", auth = Route.Auth.REQUIRED)
     void deleteCommentHandler(HttpExchange exchange) throws IOException {
+        var userId = ((AuthContext) exchange.getAttribute("authContext")).userId;
+        var routeParams = RouteParams.get(exchange);
+        var slug = routeParams.param("slug").orElseThrow();
+        var commentId = routeParams.param("commentId").orElseThrow();
 
+        try (var conn = db.getConnection();
+             var stmt = conn.prepareStatement("""
+                UPDATE realworld.comment
+                    SET deleted = true
+                WHERE
+                    realworld.comment.id = ? AND
+                    realworld.comment.user_id = ? AND
+                    realworld.comment.article_id IN (
+                        SELECT id
+                        FROM realworld.article
+                        WHERE realworld.article.slug = ?
+                    )
+                """)) {
+            stmt.setObject(1, commentId);
+            stmt.setObject(2, userId);
+            stmt.setObject(3, slug);
+
+            if (stmt.executeUpdate() == 0) {
+                HttpExchanges.sendResponse(
+                        exchange,
+                        401,
+                        JsonBody.of(
+                                Json.objectBuilder()
+                                        .put("errors", Json.objectBuilder()
+                                                .put("body", Json.arrayBuilder()
+                                                        .add("could not delete article")))
+                        )
+                );
+                return;
+            }
+
+            HttpExchanges.sendResponse(
+                    exchange,
+                    200,
+                    JsonBody.of(Json.ofNull())
+            );
+
+        } catch (SQLException e) {
+            throw new UncheckedSQLException(e);
+        }
     }
 
-    @Route(methods = "POST", pattern = "/api/articles/(?<slug>.+)/favorite", auth = Route.Auth.REQUIRED)
+    @Route(methods = "POST", pattern = "/api/articles/(?<slug>[a-zA-Z0-9-_]+)/favorite", auth = Route.Auth.REQUIRED)
     void favoriteArticleHandler(HttpExchange exchange) throws IOException {
+        var userId = ((AuthContext) exchange.getAttribute("authContext")).userId;
+        var slug = RouteParams.get(exchange).param("slug").orElseThrow();
 
+        try (var conn = db.getConnection()) {
+            UUID articleId;
+            try (var stmt = conn.prepareStatement("""
+                    SELECT id
+                    FROM realworld.article
+                    WHERE deleted = false AND slug = ?
+                    """)) {
+                stmt.setObject(1, slug);
+                var rs = stmt.executeQuery();
+                if (!rs.next()) {
+                    HttpExchanges.sendResponse(
+                            exchange,
+                            401,
+                            JsonBody.of(
+                                    Json.objectBuilder()
+                                            .put("errors", Json.objectBuilder()
+                                                    .put("body", Json.arrayBuilder()
+                                                            .add("No matching article")))
+                            )
+                    );
+                    return;
+                }
+
+                articleId = rs.getObject("id", UUID.class);
+            }
+
+            try (var stmt = conn.prepareStatement("""
+                   INSERT INTO realworld.favorite(article_id, user_id)
+                   VALUES (?, ?)
+                   """)) {
+                stmt.setObject(1, articleId);
+                stmt.setObject(2, userId);
+                stmt.execute();
+            }
+
+            try (var stmt = conn.prepareStatement("""
+                     SELECT
+                         jsonb_build_object(
+                             'article', jsonb_build_object(
+                                 'slug', realworld.article.slug,
+                                 'title', realworld.article.title,
+                                 'description', realworld.article.description,
+                                 'body', realworld.article.body,
+                                 'tagList', array(
+                                     SELECT realworld.tag.name
+                                     FROM realworld.article_tag
+                                     LEFT JOIN realworld.tag ON realworld.tag.id = realworld.article_tag.tag_id
+                                     WHERE realworld.article_tag.article_id = realworld.article.id
+                                 ),
+                                 'createdAt', realworld.article.created_at,
+                                 'updatedAt', realworld.article.updated_at,
+                                 'favorited', exists(
+                                     SELECT id
+                                     FROM realworld.favorite
+                                     WHERE article_id = realworld.article.id AND user_id = ?
+                                 ),
+                                 'favoriteCount', (
+                                     SELECT count(id)
+                                     FROM realworld.favorite
+                                     WHERE article_id = realworld.article.id
+                                 ),
+                                 'author', (
+                                     SELECT jsonb_build_object(
+                                         'username', realworld."user".username,
+                                         'bio', realworld."user".bio,
+                                         'image', realworld."user".image,
+                                         'following', exists(
+                                             SELECT id
+                                             FROM realworld.follow
+                                             WHERE from_user_id = ? AND to_user_id = realworld."user".id
+                                         )
+                                     )
+                                     FROM realworld."user"
+                                     WHERE realworld."user".id = realworld.article.user_id
+                             )
+                         ))
+                     FROM realworld.article
+                     WHERE deleted = false AND id = ?
+                     """)) {
+                stmt.setObject(1, userId);
+                stmt.setObject(2, userId);
+                stmt.setObject(3, articleId);
+
+                var rs = stmt.executeQuery();
+                rs.next();
+
+                HttpExchanges.sendResponse(exchange, 200, JsonBody.of(
+                        Json.read(rs.getObject(1).toString())
+                ));
+            }
+        } catch (SQLException e) {
+            throw new UncheckedSQLException(e);
+        }
     }
 
-    @Route(methods = "GET", pattern = "/api/articles/(?<slug>.+)/favorite", auth = Route.Auth.REQUIRED)
+    @Route(methods = "GET", pattern = "/api/articles/(?<slug>[a-zA-Z0-9-_]+)/favorite", auth = Route.Auth.REQUIRED)
     void unfavoriteArticleHandler(HttpExchange exchange) throws IOException {
 
+        var userId = ((AuthContext) exchange.getAttribute("authContext")).userId;
+        var slug = RouteParams.get(exchange).param("slug").orElseThrow();
+
+        try (var conn = db.getConnection()) {
+            UUID articleId;
+            try (var stmt = conn.prepareStatement("""
+                    SELECT id
+                    FROM realworld.article
+                    WHERE deleted = false AND slug = ?
+                    """)) {
+                stmt.setObject(1, slug);
+                var rs = stmt.executeQuery();
+                if (!rs.next()) {
+                    HttpExchanges.sendResponse(
+                            exchange,
+                            401,
+                            JsonBody.of(
+                                    Json.objectBuilder()
+                                            .put("errors", Json.objectBuilder()
+                                                    .put("body", Json.arrayBuilder()
+                                                            .add("No matching article")))
+                            )
+                    );
+                    return;
+                }
+
+                articleId = rs.getObject("id", UUID.class);
+            }
+
+            try (var stmt = conn.prepareStatement("""
+                   DELETE FROM realworld.favorite
+                   WHERE article_id = ? AND user_id = ?
+                   """)) {
+                stmt.setObject(1, articleId);
+                stmt.setObject(2, userId);
+                stmt.execute();
+            }
+
+            try (var stmt = conn.prepareStatement("""
+                     SELECT
+                         jsonb_build_object(
+                             'article', jsonb_build_object(
+                                 'slug', realworld.article.slug,
+                                 'title', realworld.article.title,
+                                 'description', realworld.article.description,
+                                 'body', realworld.article.body,
+                                 'tagList', array(
+                                     SELECT realworld.tag.name
+                                     FROM realworld.article_tag
+                                     LEFT JOIN realworld.tag ON realworld.tag.id = realworld.article_tag.tag_id
+                                     WHERE realworld.article_tag.article_id = realworld.article.id
+                                 ),
+                                 'createdAt', realworld.article.created_at,
+                                 'updatedAt', realworld.article.updated_at,
+                                 'favorited', exists(
+                                     SELECT id
+                                     FROM realworld.favorite
+                                     WHERE article_id = realworld.article.id AND user_id = ?
+                                 ),
+                                 'favoriteCount', (
+                                     SELECT count(id)
+                                     FROM realworld.favorite
+                                     WHERE article_id = realworld.article.id
+                                 ),
+                                 'author', (
+                                     SELECT jsonb_build_object(
+                                         'username', realworld."user".username,
+                                         'bio', realworld."user".bio,
+                                         'image', realworld."user".image,
+                                         'following', exists(
+                                             SELECT id
+                                             FROM realworld.follow
+                                             WHERE from_user_id = ? AND to_user_id = realworld."user".id
+                                         )
+                                     )
+                                     FROM realworld."user"
+                                     WHERE realworld."user".id = realworld.article.user_id
+                             )
+                         ))
+                     FROM realworld.article
+                     WHERE deleted = false AND id = ?
+                     """)) {
+                stmt.setObject(1, userId);
+                stmt.setObject(2, userId);
+                stmt.setObject(3, articleId);
+
+                var rs = stmt.executeQuery();
+                rs.next();
+
+                HttpExchanges.sendResponse(exchange, 200, JsonBody.of(
+                        Json.read(rs.getObject(1).toString())
+                ));
+            }
+        } catch (SQLException e) {
+            throw new UncheckedSQLException(e);
+        }
     }
 
     @Route(methods = "GET", pattern = "/api/tags")

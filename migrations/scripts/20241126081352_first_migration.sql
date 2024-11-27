@@ -38,7 +38,8 @@ CREATE TABLE realworld.article (
     slug text not null unique,
     title text not null,
     description text not null default '',
-    body text not null default ''
+    body text not null default '',
+    deleted boolean not null default false
 );
 
 create index on realworld.article using btree(user_id);
@@ -135,7 +136,8 @@ create table realworld.comment(
     user_id uuid not null references realworld.user(id)
                     on update restrict
                     on delete restrict,
-    body text not null default ''
+    body text not null default '',
+    deleted boolean not null default false
 );
 
 CREATE TRIGGER set_realworld_comment_updated_at
