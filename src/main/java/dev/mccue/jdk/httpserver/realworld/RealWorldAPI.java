@@ -7,6 +7,7 @@ import com.sun.net.httpserver.HttpHandler;
 import dev.mccue.jdbc.ResultSets;
 import dev.mccue.jdbc.SQLFragment;
 import dev.mccue.jdbc.UncheckedSQLException;
+import dev.mccue.jdk.httpserver.Body;
 import dev.mccue.jdk.httpserver.HttpExchanges;
 import dev.mccue.jdk.httpserver.json.JsonBody;
 import dev.mccue.jdk.httpserver.regexrouter.RegexRouter;
@@ -731,7 +732,135 @@ public final class RealWorldAPI {
 
     @Route(methods = "GET", pattern = "/api/articles/feed", auth = Route.Auth.REQUIRED)
     void feedArticlesHandler(HttpExchange exchange) throws IOException {
+        var userId = ((AuthContext) exchange.getAttribute("authContext")).userId;
+        var urlParameters = UrlParameters.parse(exchange.getRequestURI());
 
+        var query = new ArrayList<SQLFragment>();
+        query.add(SQLFragment.of("""
+                WITH
+                    articles AS (
+                        SELECT jsonb_build_object(
+                            'slug', realworld.article.slug,
+                            'title', realworld.article.title,
+                            'description', realworld.article.description,
+                            'tagList', array(
+                                SELECT realworld.tag.name
+                                FROM realworld.article_tag
+                                LEFT JOIN realworld.tag ON realworld.tag.id = realworld.article_tag.tag_id
+                                WHERE realworld.article_tag.article_id = realworld.article.id
+                            ),
+                            'createdAt', realworld.article.created_at,
+                            'updatedAt', realworld.article.updated_at,
+                            'favorited', exists(
+                                SELECT id
+                                FROM realworld.favorite
+                                WHERE article_id = realworld.article.id AND user_id = ?
+                            ),
+                            'favoriteCount', (
+                                SELECT count(id)
+                                FROM realworld.favorite
+                                WHERE article_id = realworld.article.id
+                            ),
+                            'author', (
+                                SELECT jsonb_build_object(
+                                    'username', realworld."user".username,
+                                    'bio', realworld."user".bio,
+                                    'image', realworld."user".image,
+                                    'following', exists(
+                                        SELECT id
+                                        FROM realworld.follow
+                                        WHERE from_user_id = ? AND to_user_id = realworld."user".id
+                                    )
+                                )
+                                FROM realworld."user"
+                                WHERE realworld."user".id = realworld.article.user_id
+                            )
+                        )
+                        FROM realworld.article
+                        WHERE deleted = false AND user_id IN (
+                            SELECT id
+                            FROM realworld.follow
+                            WHERE from_user_id = ? AND to_user_id = realworld."user".id
+                        )
+                        ORDER BY realworld.article.created_at DESC
+                """, Arrays.asList(userId, userId, userId)));
+
+        String limitString = urlParameters.firstValue("limit").orElse(null);
+        if (limitString != null) {
+            int limit;
+            try {
+                limit = Integer.parseInt(limitString);
+            } catch (NumberFormatException _) {
+                HttpExchanges.sendResponse(
+                        exchange,
+                        422,
+                        JsonBody.of(
+                                Json.objectBuilder()
+                                        .put("errors", Json.objectBuilder()
+                                                .put("body", Json.arrayBuilder()
+                                                        .add("limit must be an int")))
+                        )
+                );
+                return;
+            }
+
+            query.add(SQLFragment.of("""
+                            LIMIT ?
+                    """, List.of(limit)));
+        }
+
+        String offsetString = urlParameters.firstValue("offset").orElse(null);
+        if (offsetString != null) {
+            int offset;
+            try {
+                offset = Integer.parseInt(offsetString);
+            } catch (NumberFormatException _) {
+                HttpExchanges.sendResponse(
+                        exchange,
+                        422,
+                        JsonBody.of(
+                                Json.objectBuilder()
+                                        .put("errors", Json.objectBuilder()
+                                                .put("body", Json.arrayBuilder()
+                                                        .add("offset must be an int")))
+                        )
+                );
+                return;
+            }
+
+            query.add(SQLFragment.of("""
+                            OFFSET ?
+                    """, List.of(offset)));
+        }
+
+        query.add(SQLFragment.of("""
+                    )
+                SELECT jsonb_build_object(
+                    'articles', array(
+                        SELECT * FROM articles
+                    ),
+                    'articlesCount', (
+                        SELECT count(*) FROM articles
+                    )
+                )
+                """));
+
+
+        try (var conn = db.getConnection();
+             var stmt = SQLFragment.join("", query).prepareStatement(conn)) {
+
+            var rs = stmt.executeQuery();
+            rs.next();
+
+            HttpExchanges.sendResponse(
+                    exchange,
+                    200,
+                    JsonBody.of(Json.read(rs.getObject(1).toString()))
+            );
+
+        } catch (SQLException e) {
+            throw new UncheckedSQLException(e);
+        }
     }
 
     @Route(methods = "GET", pattern = "/api/articles/(?<slug>.+)", auth = Route.Auth.OPTIONAL)
@@ -1565,6 +1694,18 @@ public final class RealWorldAPI {
         } catch (SQLException e) {
             throw new UncheckedSQLException(e);
         }
+    }
+
+    @Route(methods = "OPTIONS", pattern = ".+")
+    void corsHandler(HttpExchange exchange) throws IOException {
+        var headers = exchange.getResponseHeaders();
+        headers.put("Access-Control-Allow-Origin", List.of("*"));
+        headers.put("Access-Control-Allow-Headers", List.of("*"));
+        HttpExchanges.sendResponse(
+                exchange,
+                200,
+                Body.empty()
+        );
     }
 
     @Retention(RetentionPolicy.RUNTIME)
