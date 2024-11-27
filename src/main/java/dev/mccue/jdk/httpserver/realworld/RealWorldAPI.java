@@ -29,6 +29,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.charset.StandardCharsets;
+import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
@@ -57,6 +58,60 @@ public final class RealWorldAPI {
         return decoder.decode(readBody(exchange));
     }
 
+    UUID getUserId(HttpExchange exchange) {
+        var authHeader = exchange.getRequestHeaders().getFirst("Authorization");
+        if (authHeader != null && authHeader.startsWith("Token ")) {
+            var token = authHeader.substring("Token ".length());
+            try (var conn = db.getConnection();
+                 var stmt = conn.prepareStatement("""
+                             SELECT user_id
+                             FROM realworld.api_key
+                             WHERE value = ? AND invalidated_at IS NULL
+                             """)) {
+                stmt.setString(1, token);
+                var rs = stmt.executeQuery();
+                if (rs.next()) {
+                    return rs.getObject("user_id", UUID.class);
+                } else {
+                    LOG.info("No api key");
+                    return null;
+                }
+            } catch (SQLException e) {
+                throw new UncheckedSQLException(e);
+            }
+        }
+        else {
+            LOG.info("No auth header");
+            return null;
+        }
+    }
+
+    String getToken(Connection conn, UUID userId) throws SQLException {
+        var apiKey = UUID.randomUUID();
+        try (var stmt = conn.prepareStatement("""
+                    INSERT INTO realworld.api_key(user_id, value)
+                    VALUES (?, ?)
+                    """)) {
+            stmt.setObject(1, userId);
+            stmt.setObject(2, apiKey.toString());
+            stmt.execute();
+        }
+        return apiKey.toString();
+    }
+
+    void unauthenticated(HttpExchange exchange) throws IOException {
+        HttpExchanges.sendResponse(
+                exchange,
+                401,
+                JsonBody.of(
+                        Json.objectBuilder()
+                                .put("errors", Json.objectBuilder()
+                                        .put("body", Json.arrayBuilder()
+                                                .add("unauthenticated")))
+                )
+        );
+    }
+
     record RegisterRequest(
             String username,
             String email,
@@ -75,11 +130,15 @@ public final class RealWorldAPI {
     void registerHandler(HttpExchange exchange) throws IOException {
         var body = readBody(exchange, RegisterRequest::fromJson);
         try (var conn = db.getConnection()) {
+
+            UUID userId = null;
+            JsonObject.Builder response = Json.objectBuilder();
+
             try (var stmt = conn.prepareStatement("""
                     INSERT INTO realworld."user"(username, email, password_hash)
                     VALUES (?, ?, ?)
                     ON CONFLICT DO NOTHING
-                    RETURNING email, username, bio, image
+                    RETURNING id, email, username, bio, image
                     """)) {
 
                 stmt.setObject(1, body.username);
@@ -87,20 +146,26 @@ public final class RealWorldAPI {
                 stmt.setObject(3, BCrypt.withDefaults().hashToString(12, body.password));
                 var rs = stmt.executeQuery();
                 if (rs.next()) {
-                    HttpExchanges.sendResponse(exchange, 200, JsonBody.of(
-                            Json.objectBuilder()
-                                    .put("user", Json.objectBuilder()
-                                            .put("email", rs.getString("email"))
-                                            .put("token", "ABC")
-                                            .put("username", rs.getString("username"))
-                                            .put("bio", rs.getString("bio"))
-                                            .put("image", rs.getString("image")))
-                    ));
-                    return;
+                    userId = rs.getObject("id", UUID.class);
+                    response
+                            .put("user", Json.objectBuilder()
+                                    .put("email", rs.getString("email"))
+                                    .put("username", rs.getString("username"))
+                                    .put("bio", rs.getString("bio"))
+                                    .put("image", rs.getString("image")));
                 }
             }
 
-            try (var stmt = conn.prepareStatement("""
+            if (userId != null) {
+                response.put("token", getToken(conn, userId));
+                HttpExchanges.sendResponse(
+                        exchange,
+                        200,
+                        JsonBody.of(response)
+                );
+            }
+            else {
+                try (var stmt = conn.prepareStatement("""
                     SELECT
                         (
                             SELECT COUNT(realworld.user.id) 
@@ -113,31 +178,34 @@ public final class RealWorldAPI {
                             WHERE email = ?
                         ) as matching_email
                     """)) {
-                stmt.setObject(1, body.username);
-                stmt.setObject(2, body.email);
-                var rs = stmt.executeQuery();
-                rs.next();
+                    stmt.setObject(1, body.username);
+                    stmt.setObject(2, body.email);
+                    var rs = stmt.executeQuery();
+                    rs.next();
 
-                var errors = new ArrayList<Json>();
-                if (ResultSets.getIntegerNotNull(rs, "matching_username") > 0) {
-                    errors.add(Json.of("username already taken"));
+                    var errors = new ArrayList<Json>();
+                    if (ResultSets.getIntegerNotNull(rs, "matching_username") > 0) {
+                        errors.add(Json.of("username already taken"));
+                    }
+
+                    if (ResultSets.getIntegerNotNull(rs, "matching_email") > 0) {
+                        errors.add(Json.of("email already taken"));
+                    }
+
+                    HttpExchanges.sendResponse(
+                            exchange,
+                            422,
+                            JsonBody.of(
+                                    Json.objectBuilder()
+                                            .put("errors", Json.objectBuilder()
+                                                    .put("body", Json.of(errors)))
+                            )
+                    );
+
                 }
-
-                if (ResultSets.getIntegerNotNull(rs, "matching_email") > 0) {
-                    errors.add(Json.of("email already taken"));
-                }
-
-                HttpExchanges.sendResponse(
-                        exchange,
-                        422,
-                        JsonBody.of(
-                                Json.objectBuilder()
-                                        .put("errors", Json.objectBuilder()
-                                                .put("body", Json.of(errors)))
-                        )
-                );
-
             }
+
+
 
         } catch (SQLException e) {
             throw new UncheckedSQLException(e);
@@ -158,7 +226,7 @@ public final class RealWorldAPI {
         var body = readBody(exchange, LoginRequest::fromJson);
 
         try (var conn = db.getConnection()) {
-            UUID id;
+            UUID userId;
             String passwordHash;
             JsonObject.Builder response = Json.objectBuilder();
             try (var stmt = conn.prepareStatement("""
@@ -182,7 +250,7 @@ public final class RealWorldAPI {
                     return;
                 }
 
-                id = rs.getObject("id", UUID.class);
+                userId = rs.getObject("id", UUID.class);
                 passwordHash = rs.getString("password_hash");
 
                 response
@@ -206,80 +274,21 @@ public final class RealWorldAPI {
                 return;
             }
 
-            var apiKey = UUID.randomUUID();
-            try (var stmt = conn.prepareStatement("""
-                    INSERT INTO realworld.api_key(user_id, value)
-                    VALUES (?, ?)
-                    """)) {
-                stmt.setObject(1, id);
-                stmt.setObject(2, apiKey.toString());
-                stmt.execute();
-            }
+            response.put("token", getToken(conn, userId));
 
-            response.put("token", apiKey.toString());
-
-            HttpExchanges.sendResponse(exchange, 200, JsonBody.of(response));
+            HttpExchanges.sendResponse(exchange, 200, JsonBody.of(Json.objectBuilder().put("user", response)));
         } catch (SQLException e) {
             throw new UncheckedSQLException(e);
         }
     }
 
-    record AuthContext(UUID userId) {
-    }
-
-    HttpHandler maybeAuthenticated(HttpHandler httpHandler) {
-        return exchange -> {
-            var authHeader = exchange.getRequestHeaders().getFirst("Authorization");
-            if (authHeader != null && authHeader.startsWith("Token ")) {
-                var token = authHeader.substring("Token ".length());
-                try (var conn = db.getConnection();
-                     var stmt = conn.prepareStatement("""
-                             SELECT user_id
-                             FROM realworld.api_key
-                             WHERE value = ? AND invalidated_at IS NULL
-                             """)) {
-                    stmt.setString(1, token);
-                    var rs = stmt.executeQuery();
-                    if (rs.next()) {
-                        exchange.setAttribute("authContext",
-                                new AuthContext(
-                                        rs.getObject("user_id", UUID.class)
-                                )
-                        );
-                    } else {
-                        LOG.info("No api key");
-                    }
-                } catch (SQLException e) {
-                    throw new UncheckedSQLException(e);
-                }
-            }
-
-            httpHandler.handle(exchange);
-        };
-    }
-
-    HttpHandler authenticated(HttpHandler httpHandler) {
-        return maybeAuthenticated(exchange -> {
-            if (exchange.getAttribute("authContext") == null) {
-                HttpExchanges.sendResponse(
-                        exchange,
-                        401,
-                        JsonBody.of(
-                                Json.objectBuilder()
-                                        .put("errors", Json.objectBuilder()
-                                                .put("body", Json.arrayBuilder()
-                                                        .add("unauthenticated")))
-                        )
-                );
-            } else {
-                httpHandler.handle(exchange);
-            }
-        });
-    }
-
-    @Route(methods = "GET", pattern = "/api/user", auth = Route.Auth.REQUIRED)
+    @Route(methods = "GET", pattern = "/api/user")
     void getCurrentUserHandler(HttpExchange exchange) throws IOException {
-        var userId = ((AuthContext) exchange.getAttribute("authContext")).userId;
+        var userId = getUserId(exchange);
+        if (userId == null) {
+            unauthenticated(exchange);
+            return;
+        }
 
         try (var conn = db.getConnection();
              var stmt = conn.prepareStatement("""
@@ -325,9 +334,13 @@ public final class RealWorldAPI {
         }
     }
 
-    @Route(methods = "PUT", pattern = "/api/user", auth = Route.Auth.REQUIRED)
+    @Route(methods = "PUT", pattern = "/api/user")
     void updateUserHandler(HttpExchange exchange) throws IOException {
-        var userId = ((AuthContext) exchange.getAttribute("authContext")).userId;
+        var userId = getUserId(exchange);
+        if (userId == null) {
+            unauthenticated(exchange);
+            return;
+        }
         var request = readBody(exchange, UpdateUserRequest::fromJson);
 
         var setFragments = new ArrayList<SQLFragment>();
@@ -375,6 +388,7 @@ public final class RealWorldAPI {
                 }
             }
 
+            JsonObject.Builder response = Json.objectBuilder();
             try (var stmt = conn.prepareStatement("""
                     SELECT email, username, bio, image, password_hash
                     FROM realworld."user"
@@ -384,26 +398,29 @@ public final class RealWorldAPI {
                 var rs = stmt.executeQuery();
                 rs.next();
 
-                HttpExchanges.sendResponse(
-                        exchange,
-                        200,
-                        JsonBody.of(
-                                Json.objectBuilder()
-                                        .put("email", rs.getString("email"))
-                                        .put("username", rs.getString("username"))
-                                        .put("bio", rs.getString("bio"))
-                                        .put("image", rs.getString("image"))
-                        )
-                );
+                response
+                        .put("user", Json.objectBuilder()
+                                .put("email", rs.getString("email"))
+                                .put("username", rs.getString("username"))
+                                .put("bio", rs.getString("bio"))
+                                .put("image", rs.getString("image")));
             }
+
+            response.put("token", getToken(conn, userId));
+
+            HttpExchanges.sendResponse(
+                    exchange,
+                    200,
+                    JsonBody.of(response)
+            );
         } catch (SQLException e) {
             throw new UncheckedSQLException(e);
         }
     }
 
-    @Route(methods = "GET", pattern = "/api/profiles/(?<username>.+)", auth = Route.Auth.OPTIONAL)
+    @Route(methods = "GET", pattern = "/api/profiles/(?<username>[a-zA-Z0-9-_]+)")
     void getProfileHandler(HttpExchange exchange) throws IOException {
-        var userId = ((AuthContext) exchange.getAttribute("authContext")).userId;
+        var userId = getUserId(exchange);
         var username = RouteParams.get(exchange)
                 .param("username")
                 .orElseThrow();
@@ -444,9 +461,13 @@ public final class RealWorldAPI {
         }
     }
 
-    @Route(methods = "POST", pattern = "/api/profiles/(?<username>.+)/follow", auth = Route.Auth.REQUIRED)
+    @Route(methods = "POST", pattern = "/api/profiles/(?<username>[a-zA-Z0-9-_]+)/follow")
     void followUserHandler(HttpExchange exchange) throws IOException {
-        var userId = ((AuthContext) exchange.getAttribute("authContext")).userId;
+        var userId = getUserId(exchange);
+        if (userId == null) {
+            unauthenticated(exchange);
+            return;
+        }
         var username = RouteParams.get(exchange)
                 .param("username")
                 .orElseThrow();
@@ -501,9 +522,14 @@ public final class RealWorldAPI {
         }
     }
 
-    @Route(methods = "DELETE", pattern = "/api/profiles/(?<username>.+)/follow", auth = Route.Auth.REQUIRED)
+    @Route(methods = "DELETE", pattern = "/api/profiles/(?<username>[a-zA-Z0-9-_]+)/follow")
     void unfollowUserHandler(HttpExchange exchange) throws IOException {
-        var userId = ((AuthContext) exchange.getAttribute("authContext")).userId;
+        var userId = getUserId(exchange);
+        if (userId == null) {
+            unauthenticated(exchange);
+            return;
+        }
+
         var username = RouteParams.get(exchange)
                 .param("username")
                 .orElseThrow();
@@ -557,15 +583,9 @@ public final class RealWorldAPI {
         }
     }
 
-    @Route(methods = "GET", pattern = "/api/articles", auth = Route.Auth.OPTIONAL)
+    @Route(methods = "GET", pattern = "/api/articles")
     void listArticlesHandler(HttpExchange exchange) throws IOException {
-        UUID userId;
-        if (exchange.getAttribute("authContext") instanceof AuthContext authContext) {
-            userId = authContext.userId;
-        } else {
-            userId = null;
-        }
-
+        var userId = getUserId(exchange);
         var urlParameters = UrlParameters.parse(exchange.getRequestURI());
 
         var query = new ArrayList<SQLFragment>();
@@ -589,7 +609,7 @@ public final class RealWorldAPI {
                                 FROM realworld.favorite
                                 WHERE article_id = realworld.article.id AND user_id = ?
                             ),
-                            'favoriteCount', (
+                            'favoritesCount', (
                                 SELECT count(id)
                                 FROM realworld.favorite
                                 WHERE article_id = realworld.article.id
@@ -730,9 +750,13 @@ public final class RealWorldAPI {
         }
     }
 
-    @Route(methods = "GET", pattern = "/api/articles/feed", auth = Route.Auth.REQUIRED)
+    @Route(methods = "GET", pattern = "/api/articles/feed")
     void feedArticlesHandler(HttpExchange exchange) throws IOException {
-        var userId = ((AuthContext) exchange.getAttribute("authContext")).userId;
+        var userId = getUserId(exchange);
+        if (userId == null) {
+            unauthenticated(exchange);
+            return;
+        }
         var urlParameters = UrlParameters.parse(exchange.getRequestURI());
 
         var query = new ArrayList<SQLFragment>();
@@ -756,7 +780,7 @@ public final class RealWorldAPI {
                                 FROM realworld.favorite
                                 WHERE article_id = realworld.article.id AND user_id = ?
                             ),
-                            'favoriteCount', (
+                            'favoritesCount', (
                                 SELECT count(id)
                                 FROM realworld.favorite
                                 WHERE article_id = realworld.article.id
@@ -863,15 +887,9 @@ public final class RealWorldAPI {
         }
     }
 
-    @Route(methods = "GET", pattern = "/api/articles/(?<slug>.+)", auth = Route.Auth.OPTIONAL)
+    @Route(methods = "GET", pattern = "/api/articles/(?<slug>[a-zA-Z0-9-_]+)")
     void getArticleHandler(HttpExchange exchange) throws IOException {
-        UUID userId;
-        if (exchange.getAttribute("authContext") instanceof AuthContext authContext) {
-            userId = authContext.userId;
-        } else {
-            userId = null;
-        }
-
+        var userId = getUserId(exchange);
         var slug = RouteParams.get(exchange).param("slug").orElseThrow();
         try (var conn = db.getConnection();
              var stmt = conn.prepareStatement("""
@@ -895,7 +913,7 @@ public final class RealWorldAPI {
                                      FROM realworld.favorite
                                      WHERE article_id = realworld.article.id AND user_id = ?
                                  ),
-                                 'favoriteCount', (
+                                 'favoritesCount', (
                                      SELECT count(id)
                                      FROM realworld.favorite
                                      WHERE article_id = realworld.article.id
@@ -970,9 +988,14 @@ public final class RealWorldAPI {
         return sb.toString();
     }
 
-    @Route(methods = "POST", pattern = "/api/articles", auth = Route.Auth.REQUIRED)
+    @Route(methods = "POST", pattern = "/api/articles")
     void createArticleHandler(HttpExchange exchange) throws IOException {
-        var userId = ((AuthContext) exchange.getAttribute("authContext")).userId;
+        var userId = getUserId(exchange);
+        if (userId == null) {
+            unauthenticated(exchange);
+            return;
+        }
+
         var body = readBody(exchange, CreateArticleRequest::fromJson);
 
         try (var conn = db.getConnection()) {
@@ -996,19 +1019,17 @@ public final class RealWorldAPI {
             var tagIds = new ArrayList<UUID>();
 
             var tagList = body.tagList.orElse(List.of());
-            if (!tagList.isEmpty()) {
-                for (var tag : tagList) {
-                    try (var stmt = conn.prepareStatement("""
+            for (var tag : tagList) {
+                try (var stmt = conn.prepareStatement("""
                             INSERT INTO realworld.tag(name)
                             VALUES (?)
                             ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
                             RETURNING id
                             """)) {
-                        stmt.setString(1, tag);
-                        var rs = stmt.executeQuery();
-                        rs.next();
-                        tagIds.add(rs.getObject("id", UUID.class));
-                    }
+                    stmt.setString(1, tag);
+                    var rs = stmt.executeQuery();
+                    rs.next();
+                    tagIds.add(rs.getObject("id", UUID.class));
                 }
             }
 
@@ -1050,7 +1071,7 @@ public final class RealWorldAPI {
                                     FROM realworld.favorite
                                     WHERE article_id = realworld.article.id AND user_id = ?
                                 ),
-                                'favoriteCount', (
+                                'favoritesCount', (
                                     SELECT count(id)
                                     FROM realworld.favorite
                                     WHERE article_id = realworld.article.id
@@ -1107,9 +1128,14 @@ public final class RealWorldAPI {
         }
     }
 
-    @Route(methods = "PUT", pattern = "/api/articles/(?<slug>.+)", auth = Route.Auth.REQUIRED)
+    @Route(methods = "PUT", pattern = "/api/articles/(?<slug>[a-zA-Z0-9-_]+)")
     void updateArticleHandler(HttpExchange exchange) throws IOException {
-        var userId = ((AuthContext) exchange.getAttribute("authContext")).userId;
+        var userId = getUserId(exchange);
+        if (userId == null) {
+            unauthenticated(exchange);
+            return;
+        }
+
         var slug = RouteParams.get(exchange).param("slug").orElseThrow();
         var body = readBody(exchange, UpdateArticleRequest::fromJson);
 
@@ -1188,7 +1214,7 @@ public final class RealWorldAPI {
                                      FROM realworld.favorite
                                      WHERE article_id = realworld.article.id AND user_id = ?
                                  ),
-                                 'favoriteCount', (
+                                'favoritesCount', (
                                      SELECT count(id)
                                      FROM realworld.favorite
                                      WHERE article_id = realworld.article.id
@@ -1227,9 +1253,13 @@ public final class RealWorldAPI {
         }
     }
 
-    @Route(methods = "DELETE", pattern = "/api/articles/(?<slug>[a-zA-Z0-9-_]+)", auth = Route.Auth.REQUIRED)
+    @Route(methods = "DELETE", pattern = "/api/articles/(?<slug>[a-zA-Z0-9-_]+)")
     void deleteArticleHandler(HttpExchange exchange) throws IOException {
-        var userId = ((AuthContext) exchange.getAttribute("authContext")).userId;
+        var userId = getUserId(exchange);
+        if (userId == null) {
+            unauthenticated(exchange);
+            return;
+        }
         var slug = RouteParams.get(exchange).param("slug").orElseThrow();
 
         try (var conn = db.getConnection();
@@ -1264,9 +1294,14 @@ public final class RealWorldAPI {
         }
     }
 
-    @Route(methods = "POST", pattern = "/api/articles/(?<slug>[a-zA-Z0-9-_]+)/comments", auth = Route.Auth.REQUIRED)
+    @Route(methods = "POST", pattern = "/api/articles/(?<slug>[a-zA-Z0-9-_]+)/comments")
     void addCommentsToArticleHandler(HttpExchange exchange) throws IOException {
-        var userId = ((AuthContext) exchange.getAttribute("authContext")).userId;
+        var userId = getUserId(exchange);
+        if (userId == null) {
+            unauthenticated(exchange);
+            return;
+        }
+
         var slug = RouteParams.get(exchange).param("slug").orElseThrow();
 
         var body = field(readBody(exchange), "comment", field("body", string()));
@@ -1296,20 +1331,23 @@ public final class RealWorldAPI {
 
                 articleId = rs.getObject("id", UUID.class);
             }
+
+            var commentId = UUID.randomUUID();
             try (var stmt = conn.prepareStatement("""
-                   INSERT INTO realworld.comment(article_id, user_id, body)
-                   VALUES (?, ?, ?)
+                   INSERT INTO realworld.comment(id, article_id, user_id, body)
+                   VALUES (?, ?, ?, ?)
                    RETURNING id
                    """)) {
-                stmt.setObject(1, articleId);
-                stmt.setObject(2, userId);
-                stmt.setString(3, body);
-
+                stmt.setObject(1, commentId);
+                stmt.setObject(2, articleId);
+                stmt.setObject(3, userId);
+                stmt.setString(4, body);
+                stmt.execute();
             }
             try (var stmt = conn.prepareStatement("""
                     SELECT
                         jsonb_build_object(
-                            'comments', array(
+                            'comment', (
                                 SELECT jsonb_build_object(
                                     'id', realworld.comment.id,
                                     'createdAt', realworld.comment.created_at,
@@ -1331,13 +1369,12 @@ public final class RealWorldAPI {
                                     )
                                 )
                                 FROM realworld.comment
-                                WHERE realworld.comment.article_id = realworld.article.id
+                                WHERE realworld.comment.id = ?
                             )
                         )
-                    FROM realworld.article WHERE realworld.article.id = ?
                     """)) {
                 stmt.setObject(1, userId);
-                stmt.setObject(2, articleId);
+                stmt.setObject(2, commentId);
 
                 var rs = stmt.executeQuery();
                 rs.next();
@@ -1352,15 +1389,9 @@ public final class RealWorldAPI {
         }
     }
 
-    @Route(methods = "GET", pattern = "/api/articles/(?<slug>[a-zA-Z0-9-_]+)/comments", auth = Route.Auth.OPTIONAL)
+    @Route(methods = "GET", pattern = "/api/articles/(?<slug>[a-zA-Z0-9-_]+)/comments")
     void getCommentsFromArticleHandler(HttpExchange exchange) throws IOException {
-        UUID userId;
-        if (exchange.getAttribute("authContext") instanceof AuthContext authContext) {
-            userId = authContext.userId;
-        } else {
-            userId = null;
-        }
-
+        var userId = getUserId(exchange);
         var slug = RouteParams.get(exchange).param("slug").orElseThrow();
 
         try (var conn = db.getConnection();
@@ -1421,9 +1452,13 @@ public final class RealWorldAPI {
         }
     }
 
-    @Route(methods = "DELETE", pattern = "/api/articles/(?<slug>[a-zA-Z0-9-_]+)/comments/(?<commentId>[a-zA-Z0-9-_]+)", auth = Route.Auth.REQUIRED)
+    @Route(methods = "DELETE", pattern = "/api/articles/(?<slug>[a-zA-Z0-9-_]+)/comments/(?<commentId>[a-zA-Z0-9-_]+)")
     void deleteCommentHandler(HttpExchange exchange) throws IOException {
-        var userId = ((AuthContext) exchange.getAttribute("authContext")).userId;
+        var userId = getUserId(exchange);
+        if (userId == null) {
+            unauthenticated(exchange);
+            return;
+        }
         var routeParams = RouteParams.get(exchange);
         var slug = routeParams.param("slug").orElseThrow();
         var commentId = routeParams.param("commentId").orElseThrow();
@@ -1470,9 +1505,14 @@ public final class RealWorldAPI {
         }
     }
 
-    @Route(methods = "POST", pattern = "/api/articles/(?<slug>[a-zA-Z0-9-_]+)/favorite", auth = Route.Auth.REQUIRED)
+    @Route(methods = "POST", pattern = "/api/articles/(?<slug>[a-zA-Z0-9-_]+)/favorite")
     void favoriteArticleHandler(HttpExchange exchange) throws IOException {
-        var userId = ((AuthContext) exchange.getAttribute("authContext")).userId;
+        var userId = getUserId(exchange);
+        if (userId == null) {
+            unauthenticated(exchange);
+            return;
+        }
+
         var slug = RouteParams.get(exchange).param("slug").orElseThrow();
 
         try (var conn = db.getConnection()) {
@@ -1531,7 +1571,7 @@ public final class RealWorldAPI {
                                      FROM realworld.favorite
                                      WHERE article_id = realworld.article.id AND user_id = ?
                                  ),
-                                 'favoriteCount', (
+                                'favoritesCount', (
                                      SELECT count(id)
                                      FROM realworld.favorite
                                      WHERE article_id = realworld.article.id
@@ -1570,10 +1610,14 @@ public final class RealWorldAPI {
         }
     }
 
-    @Route(methods = "GET", pattern = "/api/articles/(?<slug>[a-zA-Z0-9-_]+)/favorite", auth = Route.Auth.REQUIRED)
+    @Route(methods = "DELETE", pattern = "/api/articles/(?<slug>[a-zA-Z0-9-_]+)/favorite")
     void unfavoriteArticleHandler(HttpExchange exchange) throws IOException {
+        var userId = getUserId(exchange);
+        if (userId == null) {
+            unauthenticated(exchange);
+            return;
+        }
 
-        var userId = ((AuthContext) exchange.getAttribute("authContext")).userId;
         var slug = RouteParams.get(exchange).param("slug").orElseThrow();
 
         try (var conn = db.getConnection()) {
@@ -1632,7 +1676,7 @@ public final class RealWorldAPI {
                                      FROM realworld.favorite
                                      WHERE article_id = realworld.article.id AND user_id = ?
                                  ),
-                                 'favoriteCount', (
+                                'favoritesCount', (
                                      SELECT count(id)
                                      FROM realworld.favorite
                                      WHERE article_id = realworld.article.id
@@ -1661,6 +1705,7 @@ public final class RealWorldAPI {
 
                 var rs = stmt.executeQuery();
                 rs.next();
+                System.out.println("AAA: " + Json.read(rs.getObject(1).toString()));
 
                 HttpExchanges.sendResponse(exchange, 200, JsonBody.of(
                         Json.read(rs.getObject(1).toString())
@@ -1683,12 +1728,13 @@ public final class RealWorldAPI {
                     exchange,
                     200,
                     JsonBody.of(
-                            JsonArray.of(
-                                    ResultSets.getList(
-                                            rs,
-                                            r -> Json.of(r.getString("name"))
+                            Json.objectBuilder()
+                                    .put("tags",
+                                            ResultSets.getList(
+                                                    rs,
+                                                    r -> Json.of(r.getString("name"))
+                                            )
                                     )
-                            )
                     )
             );
         } catch (SQLException e) {
@@ -1714,14 +1760,6 @@ public final class RealWorldAPI {
         String[] methods();
 
         @Language("RegExp") String pattern();
-
-        Auth auth() default Auth.NONE;
-
-        enum Auth {
-            NONE,
-            OPTIONAL,
-            REQUIRED
-        }
     }
 
     public void register(RegexRouter.Builder builder) {
@@ -1737,12 +1775,6 @@ public final class RealWorldAPI {
                         throw new IllegalStateException(e);
                     }
                 };
-
-                switch (route.auth()) {
-                    case OPTIONAL -> handler = maybeAuthenticated(handler);
-                    case REQUIRED -> handler = authenticated(handler);
-                }
-
                 builder.route(
                         Arrays.asList(route.methods()),
                         Pattern.compile(route.pattern()),
