@@ -27,6 +27,7 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
+import java.lang.invoke.LambdaMetafactory;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
@@ -71,7 +72,9 @@ public final class RealWorldAPI {
                 stmt.setString(1, token);
                 var rs = stmt.executeQuery();
                 if (rs.next()) {
-                    return rs.getObject("user_id", UUID.class);
+                    var id = rs.getObject("user_id", UUID.class);
+                    LOG.info("Extracted info for user {}", id);
+                    return id;
                 } else {
                     LOG.info("No api key");
                     return null;
@@ -130,45 +133,44 @@ public final class RealWorldAPI {
     void registerHandler(HttpExchange exchange) throws IOException {
         var body = readBody(exchange, RegisterRequest::fromJson);
         try (var conn = db.getConnection()) {
-
             UUID userId = null;
-            JsonObject.Builder response = Json.objectBuilder();
-
+            JsonObject.Builder userJson = Json.objectBuilder();
             try (var stmt = conn.prepareStatement("""
                     INSERT INTO realworld."user"(username, email, password_hash)
                     VALUES (?, ?, ?)
-                    ON CONFLICT DO NOTHING
+                    ON CONFLICT (username)
+                        DO UPDATE SET id = EXCLUDED.id
                     RETURNING id, email, username, bio, image
                     """)) {
 
                 stmt.setObject(1, body.username);
-                stmt.setObject(2, body.email);
+                stmt.setObject(2, body.email.toLowerCase(Locale.US));
                 stmt.setObject(3, BCrypt.withDefaults().hashToString(12, body.password));
                 var rs = stmt.executeQuery();
                 if (rs.next()) {
                     userId = rs.getObject("id", UUID.class);
-                    response
-                            .put("user", Json.objectBuilder()
-                                    .put("email", rs.getString("email"))
-                                    .put("username", rs.getString("username"))
-                                    .put("bio", rs.getString("bio"))
-                                    .put("image", rs.getString("image")));
+                    userJson
+                            .put("email", rs.getString("email"))
+                            .put("username", rs.getString("username"))
+                            .put("bio", rs.getString("bio"))
+                            .put("image", rs.getString("image"));
                 }
             }
 
             if (userId != null) {
-                response.put("token", getToken(conn, userId));
+                userJson.put("token", getToken(conn, userId));
                 HttpExchanges.sendResponse(
                         exchange,
                         200,
-                        JsonBody.of(response)
+                        JsonBody.of(Json.objectBuilder().put("user", userJson))
                 );
             }
             else {
+                LOG.warn("Matching user found. Determining why");
                 try (var stmt = conn.prepareStatement("""
                     SELECT
                         (
-                            SELECT COUNT(realworld.user.id) 
+                                SELECT COUNT(realworld.user.id)
                             FROM realworld.user 
                             WHERE username = ?
                         ) as matching_username,
@@ -185,10 +187,12 @@ public final class RealWorldAPI {
 
                     var errors = new ArrayList<Json>();
                     if (ResultSets.getIntegerNotNull(rs, "matching_username") > 0) {
+                        LOG.warn("Duplicate username. {}", body.username);
                         errors.add(Json.of("username already taken"));
                     }
 
                     if (ResultSets.getIntegerNotNull(rs, "matching_email") > 0) {
+                        LOG.warn("Duplicate email. {}", body.email);
                         errors.add(Json.of("email already taken"));
                     }
 
@@ -201,12 +205,8 @@ public final class RealWorldAPI {
                                                     .put("body", Json.of(errors)))
                             )
                     );
-
                 }
             }
-
-
-
         } catch (SQLException e) {
             throw new UncheckedSQLException(e);
         }
@@ -228,7 +228,7 @@ public final class RealWorldAPI {
         try (var conn = db.getConnection()) {
             UUID userId;
             String passwordHash;
-            JsonObject.Builder response = Json.objectBuilder();
+            JsonObject.Builder userJson = Json.objectBuilder();
             try (var stmt = conn.prepareStatement("""
                     SELECT id, email, username, bio, image, password_hash
                     FROM realworld."user"
@@ -253,7 +253,7 @@ public final class RealWorldAPI {
                 userId = rs.getObject("id", UUID.class);
                 passwordHash = rs.getString("password_hash");
 
-                response
+                userJson
                         .put("email", rs.getString("email"))
                         .put("username", rs.getString("username"))
                         .put("bio", rs.getString("bio"))
@@ -274,9 +274,9 @@ public final class RealWorldAPI {
                 return;
             }
 
-            response.put("token", getToken(conn, userId));
+            userJson.put("token", getToken(conn, userId));
 
-            HttpExchanges.sendResponse(exchange, 200, JsonBody.of(Json.objectBuilder().put("user", response)));
+            HttpExchanges.sendResponse(exchange, 200, JsonBody.of(Json.objectBuilder().put("user", userJson)));
         } catch (SQLException e) {
             throw new UncheckedSQLException(e);
         }
@@ -290,25 +290,31 @@ public final class RealWorldAPI {
             return;
         }
 
-        try (var conn = db.getConnection();
-             var stmt = conn.prepareStatement("""
+        try (var conn = db.getConnection()) {
+            JsonObject.Builder userJson = Json.objectBuilder();
+            try (var stmt = conn.prepareStatement("""
                      SELECT email, username, bio, image
                      FROM realworld."user"
                      WHERE id = ?
                      """)) {
-            stmt.setObject(1, userId);
-            var rs = stmt.executeQuery();
-            rs.next();
+                stmt.setObject(1, userId);
+                var rs = stmt.executeQuery();
+                rs.next();
+                userJson
+                        .put("email", rs.getString("email"))
+                        .put("username", rs.getString("username"))
+                        .put("bio", rs.getString("bio"))
+                        .put("image", rs.getString("image"));
+            }
+
+            userJson.put("token", getToken(conn, userId));
+
             HttpExchanges.sendResponse(
                     exchange,
                     200,
                     JsonBody.of(
                             Json.objectBuilder()
-                                    .put("user", Json.objectBuilder()
-                                            .put("email", rs.getString("email"))
-                                            .put("username", rs.getString("username"))
-                                            .put("bio", rs.getString("bio"))
-                                            .put("image", rs.getString("image")))
+                                    .put("user", userJson)
                     )
             );
         } catch (SQLException e) {
@@ -388,7 +394,7 @@ public final class RealWorldAPI {
                 }
             }
 
-            JsonObject.Builder response = Json.objectBuilder();
+            JsonObject.Builder userJson = Json.objectBuilder();
             try (var stmt = conn.prepareStatement("""
                     SELECT email, username, bio, image, password_hash
                     FROM realworld."user"
@@ -398,20 +404,19 @@ public final class RealWorldAPI {
                 var rs = stmt.executeQuery();
                 rs.next();
 
-                response
-                        .put("user", Json.objectBuilder()
-                                .put("email", rs.getString("email"))
-                                .put("username", rs.getString("username"))
-                                .put("bio", rs.getString("bio"))
-                                .put("image", rs.getString("image")));
+                userJson
+                        .put("email", rs.getString("email"))
+                        .put("username", rs.getString("username"))
+                        .put("bio", rs.getString("bio"))
+                        .put("image", rs.getString("image"));
             }
 
-            response.put("token", getToken(conn, userId));
+            userJson.put("token", getToken(conn, userId));
 
             HttpExchanges.sendResponse(
                     exchange,
                     200,
-                    JsonBody.of(response)
+                    JsonBody.of(Json.objectBuilder().put("user", userJson))
             );
         } catch (SQLException e) {
             throw new UncheckedSQLException(e);
@@ -601,6 +606,7 @@ public final class RealWorldAPI {
                                 FROM realworld.article_tag
                                 LEFT JOIN realworld.tag ON realworld.tag.id = realworld.article_tag.tag_id
                                 WHERE realworld.article_tag.article_id = realworld.article.id
+                                ORDER BY realworld.article_tag.created_at ASC
                             ),
                             'createdAt', realworld.article.created_at,
                             'updatedAt', realworld.article.updated_at,
@@ -635,11 +641,11 @@ public final class RealWorldAPI {
 
         urlParameters.firstValue("tag").ifPresent(tag -> {
             query.add(SQLFragment.of("""
-                                AND ? IN (
+                                AND EXISTS(
                                     SELECT realworld.tag.name
                                     FROM realworld.article_tag
                                     LEFT JOIN realworld.tag ON realworld.tag.id = realworld.article_tag.tag_id
-                                    WHERE realworld.article_tag.article_id = realworld.article.id
+                                    WHERE realworld.tag.name = ?
                                 )
                     """, List.of(tag)));
         });
@@ -739,6 +745,8 @@ public final class RealWorldAPI {
             var rs = stmt.executeQuery();
             rs.next();
 
+            System.out.println(exchange.getRequestURI());
+            System.out.println(Json.read(rs.getObject(1).toString()));
             HttpExchanges.sendResponse(
                     exchange,
                     200,
@@ -772,6 +780,7 @@ public final class RealWorldAPI {
                                 FROM realworld.article_tag
                                 LEFT JOIN realworld.tag ON realworld.tag.id = realworld.article_tag.tag_id
                                 WHERE realworld.article_tag.article_id = realworld.article.id
+                                ORDER BY realworld.article_tag.created_at ASC
                             ),
                             'createdAt', realworld.article.created_at,
                             'updatedAt', realworld.article.updated_at,
@@ -802,9 +811,13 @@ public final class RealWorldAPI {
                         )
                         FROM realworld.article
                         WHERE deleted = false AND user_id IN (
-                            SELECT id
+                            SELECT from_user_id
                             FROM realworld.follow
-                            WHERE from_user_id = ? AND to_user_id = realworld."user".id
+                            WHERE from_user_id = ? AND to_user_id = (
+                                SELECT id
+                                FROM realworld."user"
+                                WHERE realworld."user".id = realworld.article.user_id
+                            )
                         )
                         ORDER BY realworld.article.created_at DESC
                 """, Arrays.asList(userId, userId, userId)));
@@ -905,6 +918,7 @@ public final class RealWorldAPI {
                                      FROM realworld.article_tag
                                      LEFT JOIN realworld.tag ON realworld.tag.id = realworld.article_tag.tag_id
                                      WHERE realworld.article_tag.article_id = realworld.article.id
+                                     ORDER BY realworld.article_tag.created_at ASC
                                  ),
                                  'createdAt', realworld.article.created_at,
                                  'updatedAt', realworld.article.updated_at,
@@ -929,6 +943,8 @@ public final class RealWorldAPI {
                                              WHERE from_user_id = ? AND to_user_id = realworld."user".id
                                          )
                                      )
+                                     FROM realworld."user"
+                                     WHERE realworld."user".id = realworld.article.user_id
                              )
                          ))
                      FROM realworld.article
@@ -940,6 +956,7 @@ public final class RealWorldAPI {
 
             var rs = stmt.executeQuery();
             if (!rs.next()) {
+                System.out.println(exchange.getRequestURI());
                 HttpExchanges.sendResponse(
                         exchange,
                         401,
@@ -1063,6 +1080,7 @@ public final class RealWorldAPI {
                                     FROM realworld.article_tag
                                     LEFT JOIN realworld.tag ON realworld.tag.id = realworld.article_tag.tag_id
                                     WHERE realworld.article_tag.article_id = realworld.article.id
+                                    ORDER BY realworld.article_tag.created_at ASC
                                 ),
                                 'createdAt', realworld.article.created_at,
                                 'updatedAt', realworld.article.updated_at,
@@ -1206,6 +1224,7 @@ public final class RealWorldAPI {
                                      FROM realworld.article_tag
                                      LEFT JOIN realworld.tag ON realworld.tag.id = realworld.article_tag.tag_id
                                      WHERE realworld.article_tag.article_id = realworld.article.id
+                                    ORDER BY realworld.article_tag.created_at ASC
                                  ),
                                  'createdAt', realworld.article.created_at,
                                  'updatedAt', realworld.article.updated_at,
@@ -1461,7 +1480,7 @@ public final class RealWorldAPI {
         }
         var routeParams = RouteParams.get(exchange);
         var slug = routeParams.param("slug").orElseThrow();
-        var commentId = routeParams.param("commentId").orElseThrow();
+        var commentId = UUID.fromString(routeParams.param("commentId").orElseThrow());
 
         try (var conn = db.getConnection();
              var stmt = conn.prepareStatement("""
@@ -1563,6 +1582,7 @@ public final class RealWorldAPI {
                                      FROM realworld.article_tag
                                      LEFT JOIN realworld.tag ON realworld.tag.id = realworld.article_tag.tag_id
                                      WHERE realworld.article_tag.article_id = realworld.article.id
+                                    ORDER BY realworld.article_tag.created_at ASC
                                  ),
                                  'createdAt', realworld.article.created_at,
                                  'updatedAt', realworld.article.updated_at,
@@ -1668,6 +1688,7 @@ public final class RealWorldAPI {
                                      FROM realworld.article_tag
                                      LEFT JOIN realworld.tag ON realworld.tag.id = realworld.article_tag.tag_id
                                      WHERE realworld.article_tag.article_id = realworld.article.id
+                                    ORDER BY realworld.article_tag.created_at ASC
                                  ),
                                  'createdAt', realworld.article.created_at,
                                  'updatedAt', realworld.article.updated_at,
@@ -1705,7 +1726,6 @@ public final class RealWorldAPI {
 
                 var rs = stmt.executeQuery();
                 rs.next();
-                System.out.println("AAA: " + Json.read(rs.getObject(1).toString()));
 
                 HttpExchanges.sendResponse(exchange, 200, JsonBody.of(
                         Json.read(rs.getObject(1).toString())

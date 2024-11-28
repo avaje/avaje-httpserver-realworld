@@ -1,4 +1,6 @@
 -- // First migration.
+CREATE EXTENSION citext;
+
 CREATE SCHEMA realworld;
 
 CREATE FUNCTION realworld.set_current_timestamp_updated_at()
@@ -18,9 +20,10 @@ CREATE TABLE realworld.user (
     updated_at timestamptz NOT NULL DEFAULT now(),
     username text not null unique,
     password_hash text not null,
-    email text not null unique,
+    email citext not null unique,
     bio text not null default '',
-    image text
+    image text,
+    unique (username, email)
 );
 
 CREATE TRIGGER set_realworld_user_updated_at
@@ -165,3 +168,5 @@ create index on realworld.api_key using btree(value);
 
 -- //@UNDO
 DROP SCHEMA realworld cascade;
+
+DROP EXTENSION citext;
