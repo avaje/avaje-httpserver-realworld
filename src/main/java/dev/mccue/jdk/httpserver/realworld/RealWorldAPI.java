@@ -606,7 +606,7 @@ public final class RealWorldAPI {
                                 FROM realworld.article_tag
                                 LEFT JOIN realworld.tag ON realworld.tag.id = realworld.article_tag.tag_id
                                 WHERE realworld.article_tag.article_id = realworld.article.id
-                                ORDER BY realworld.article_tag.created_at ASC
+                                ORDER BY realworld.tag.name
                             ),
                             'createdAt', realworld.article.created_at,
                             'updatedAt', realworld.article.updated_at,
@@ -642,10 +642,14 @@ public final class RealWorldAPI {
         urlParameters.firstValue("tag").ifPresent(tag -> {
             query.add(SQLFragment.of("""
                                 AND EXISTS(
-                                    SELECT realworld.tag.name
+                                    SELECT id
                                     FROM realworld.article_tag
-                                    LEFT JOIN realworld.tag ON realworld.tag.id = realworld.article_tag.tag_id
-                                    WHERE realworld.tag.name = ?
+                                    WHERE realworld.article_tag.article_id = realworld.article.id
+                                        AND ? = (
+                                            SELECT name
+                                            FROM realworld.tag
+                                            WHERE realworld.tag.id = realworld.article_tag.tag_id
+                                        )
                                 )
                     """, List.of(tag)));
         });
@@ -780,7 +784,7 @@ public final class RealWorldAPI {
                                 FROM realworld.article_tag
                                 LEFT JOIN realworld.tag ON realworld.tag.id = realworld.article_tag.tag_id
                                 WHERE realworld.article_tag.article_id = realworld.article.id
-                                ORDER BY realworld.article_tag.created_at ASC
+                                ORDER BY realworld.tag.name
                             ),
                             'createdAt', realworld.article.created_at,
                             'updatedAt', realworld.article.updated_at,
@@ -918,7 +922,7 @@ public final class RealWorldAPI {
                                      FROM realworld.article_tag
                                      LEFT JOIN realworld.tag ON realworld.tag.id = realworld.article_tag.tag_id
                                      WHERE realworld.article_tag.article_id = realworld.article.id
-                                     ORDER BY realworld.article_tag.created_at ASC
+                                     ORDER BY realworld.tag.name
                                  ),
                                  'createdAt', realworld.article.created_at,
                                  'updatedAt', realworld.article.updated_at,
@@ -1080,7 +1084,7 @@ public final class RealWorldAPI {
                                     FROM realworld.article_tag
                                     LEFT JOIN realworld.tag ON realworld.tag.id = realworld.article_tag.tag_id
                                     WHERE realworld.article_tag.article_id = realworld.article.id
-                                    ORDER BY realworld.article_tag.created_at ASC
+                                    ORDER BY realworld.tag.name
                                 ),
                                 'createdAt', realworld.article.created_at,
                                 'updatedAt', realworld.article.updated_at,
@@ -1224,7 +1228,7 @@ public final class RealWorldAPI {
                                      FROM realworld.article_tag
                                      LEFT JOIN realworld.tag ON realworld.tag.id = realworld.article_tag.tag_id
                                      WHERE realworld.article_tag.article_id = realworld.article.id
-                                    ORDER BY realworld.article_tag.created_at ASC
+                                     ORDER BY realworld.tag.name
                                  ),
                                  'createdAt', realworld.article.created_at,
                                  'updatedAt', realworld.article.updated_at,
@@ -1582,7 +1586,7 @@ public final class RealWorldAPI {
                                      FROM realworld.article_tag
                                      LEFT JOIN realworld.tag ON realworld.tag.id = realworld.article_tag.tag_id
                                      WHERE realworld.article_tag.article_id = realworld.article.id
-                                    ORDER BY realworld.article_tag.created_at ASC
+                                     ORDER BY realworld.tag.name
                                  ),
                                  'createdAt', realworld.article.created_at,
                                  'updatedAt', realworld.article.updated_at,
@@ -1688,7 +1692,7 @@ public final class RealWorldAPI {
                                      FROM realworld.article_tag
                                      LEFT JOIN realworld.tag ON realworld.tag.id = realworld.article_tag.tag_id
                                      WHERE realworld.article_tag.article_id = realworld.article.id
-                                    ORDER BY realworld.article_tag.created_at ASC
+                                     ORDER BY realworld.tag.name
                                  ),
                                  'createdAt', realworld.article.created_at,
                                  'updatedAt', realworld.article.updated_at,
