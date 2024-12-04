@@ -11,4 +11,4 @@ FROM amazoncorretto:23
 
 COPY --from=build target/server-distribution ./server-distribution
 
-ENTRYPOINT ["./server-distribution/bin/server.sh"]
+ENTRYPOINT ["sh", "server-distribution/bin/server.sh"]

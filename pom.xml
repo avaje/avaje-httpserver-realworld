@@ -21,7 +21,6 @@
             <artifactId>json</artifactId>
             <version>2024.11.20</version>
         </dependency>
-
         <dependency>
             <groupId>dev.mccue</groupId>
             <artifactId>jdk-httpserver-json</artifactId>
@@ -140,11 +139,6 @@
             <version>26.0.0</version>
         </dependency>
 
-        <dependency>
-            <groupId>com.samskivert</groupId>
-            <artifactId>jmustache</artifactId>
-            <version>1.16</version>
-        </dependency>
     </dependencies>
 
     <build>
