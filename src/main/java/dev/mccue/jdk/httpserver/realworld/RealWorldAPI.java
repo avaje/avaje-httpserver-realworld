@@ -48,17 +48,6 @@ public final class RealWorldAPI {
         this.db = db;
     }
 
-    Json readBody(HttpExchange exchange) throws IOException {
-        return Json.read(new String(
-                exchange.getRequestBody().readAllBytes(),
-                StandardCharsets.UTF_8
-        ));
-    }
-
-    <T> T readBody(HttpExchange exchange, JsonDecoder<T> decoder) throws IOException {
-        return decoder.decode(readBody(exchange));
-    }
-
     UUID getUserId(HttpExchange exchange) {
         var authHeader = exchange.getRequestHeaders().getFirst("Authorization");
         if (authHeader != null && authHeader.startsWith("Token ")) {
@@ -131,7 +120,7 @@ public final class RealWorldAPI {
 
     @Route(methods = "POST", pattern = "/api/users")
     void registerHandler(HttpExchange exchange) throws IOException {
-        var body = readBody(exchange, RegisterRequest::fromJson);
+        var body = JsonBody.read(exchange, RegisterRequest::fromJson);
         try (var conn = db.getConnection()) {
             UUID userId = null;
             JsonObject.Builder userJson = Json.objectBuilder();
@@ -223,7 +212,7 @@ public final class RealWorldAPI {
 
     @Route(methods = "POST", pattern = "/api/users/login")
     void loginHandler(HttpExchange exchange) throws IOException {
-        var body = readBody(exchange, LoginRequest::fromJson);
+        var body = JsonBody.read(exchange, LoginRequest::fromJson);
 
         try (var conn = db.getConnection()) {
             UUID userId;
@@ -347,7 +336,7 @@ public final class RealWorldAPI {
             unauthenticated(exchange);
             return;
         }
-        var request = readBody(exchange, UpdateUserRequest::fromJson);
+        var request = JsonBody.read(exchange, UpdateUserRequest::fromJson);
 
         var setFragments = new ArrayList<SQLFragment>();
         request.email.ifPresent(email -> {
@@ -963,7 +952,7 @@ public final class RealWorldAPI {
                 System.out.println(exchange.getRequestURI());
                 HttpExchanges.sendResponse(
                         exchange,
-                        401,
+                        422,
                         JsonBody.of(
                                 Json.objectBuilder()
                                         .put("errors", Json.objectBuilder()
@@ -1017,7 +1006,7 @@ public final class RealWorldAPI {
             return;
         }
 
-        var body = readBody(exchange, CreateArticleRequest::fromJson);
+        var body = JsonBody.read(exchange, CreateArticleRequest::fromJson);
 
         try (var conn = db.getConnection()) {
             conn.setAutoCommit(false);
@@ -1159,7 +1148,7 @@ public final class RealWorldAPI {
         }
 
         var slug = RouteParams.get(exchange).param("slug").orElseThrow();
-        var body = readBody(exchange, UpdateArticleRequest::fromJson);
+        var body = JsonBody.read(exchange, UpdateArticleRequest::fromJson);
 
         try (var conn = db.getConnection()) {
             UUID articleId = null;
@@ -1327,7 +1316,7 @@ public final class RealWorldAPI {
 
         var slug = RouteParams.get(exchange).param("slug").orElseThrow();
 
-        var body = field(readBody(exchange), "comment", field("body", string()));
+        var body = field(JsonBody.read(exchange), "comment", field("body", string()));
 
         try (var conn = db.getConnection()) {
             UUID articleId;
@@ -1766,7 +1755,7 @@ public final class RealWorldAPI {
         }
     }
 
-    @Route(methods = "OPTIONS", pattern = ".+")
+    @Route(methods = "OPTIONS", pattern = "/api/.+")
     void corsHandler(HttpExchange exchange) throws IOException {
         var headers = exchange.getResponseHeaders();
         headers.put("Access-Control-Allow-Origin", List.of("*"));
@@ -1776,14 +1765,6 @@ public final class RealWorldAPI {
                 200,
                 Body.empty()
         );
-    }
-
-    @Retention(RetentionPolicy.RUNTIME)
-    @Target(ElementType.METHOD)
-    @interface Route {
-        String[] methods();
-
-        @Language("RegExp") String pattern();
     }
 
     public void register(RegexRouter.Builder builder) {

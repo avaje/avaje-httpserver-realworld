@@ -13,7 +13,7 @@ import org.slf4j.LoggerFactory;
 import java.net.InetSocketAddress;
 
 public final class Main {
-    private static final Logger LOGGER =
+    private static final Logger LOG =
             LoggerFactory.getLogger(Main.class);
 
     private Main() {
@@ -21,7 +21,9 @@ public final class Main {
     }
 
     public void start() throws Exception {
-        var env = Dotenv.load();
+        var env = Dotenv.configure()
+                .ignoreIfMissing()
+                .load();
         var db = new HikariDataSource();
         db.setDriverClassName(env.get("POSTGRES_DRIVER"));
         db.setJdbcUrl(env.get("POSTGRES_URL"));
@@ -30,7 +32,7 @@ public final class Main {
 
         int port;
         try {
-            port = Integer.parseInt(System.getenv("PORT"));
+            port = Integer.parseInt(env.get("PORT"));
         } catch (NumberFormatException e) {
             port = 7585;
         }
@@ -42,7 +44,7 @@ public final class Main {
 
         var routerBuilder = RegexRouter.builder()
                 .errorHandler((throwable, httpExchange) -> {
-                    LOGGER.error(
+                    LOG.error(
                             "Unhandled exception while handling {} {}",
                             httpExchange.getRequestMethod(),
                             httpExchange.getRequestURI(),
@@ -53,7 +55,6 @@ public final class Main {
                                     .put("errors", Json.objectBuilder()
                                             .put("request", Json.arrayBuilder()
                                                     .add(Json.of("internal error"))))));
-                    ;
                 })
                 .notFoundHandler(exchange ->
                         HttpExchanges.sendResponse(exchange, 404, JsonBody.of(
@@ -68,7 +69,7 @@ public final class Main {
         var router = routerBuilder.build();
 
         server.createContext("/", exchange -> {
-            LOGGER.info("{} {}", exchange.getRequestMethod(), exchange.getRequestURI());
+            LOG.info("{} {}", exchange.getRequestMethod(), exchange.getRequestURI());
             router.handle(exchange);
         });
 
