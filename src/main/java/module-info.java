@@ -27,6 +27,8 @@ module dev.mccue.jdk.httpserver.realworld {
     requires slugify;
     /// Postgres Driver
     requires org.postgresql.jdbc;
+    /// Jetty backing implementation
+    requires org.eclipse.jetty.http.spi;
 
     exports dev.mccue.jdk.httpserver.realworld;
 }

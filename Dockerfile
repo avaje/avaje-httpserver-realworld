@@ -8,7 +8,6 @@ RUN ls
 
 FROM amazoncorretto:23
 
-
 COPY --from=build target/server-distribution ./server-distribution
 
 ENTRYPOINT ["sh", "server-distribution/bin/server.sh"]

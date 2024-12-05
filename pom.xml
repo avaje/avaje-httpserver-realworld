@@ -21,43 +21,23 @@
             <artifactId>json</artifactId>
             <version>2024.11.20</version>
         </dependency>
+
         <dependency>
             <groupId>dev.mccue</groupId>
             <artifactId>jdk-httpserver-json</artifactId>
             <version>2024.12.04</version>
         </dependency>
+
         <dependency>
             <groupId>dev.mccue</groupId>
             <artifactId>jdk-httpserver</artifactId>
             <version>2024.11.18</version>
         </dependency>
+
         <dependency>
             <groupId>dev.mccue</groupId>
             <artifactId>jdk-httpserver-regexrouter</artifactId>
             <version>2024.05.12</version>
-        </dependency>
-        <dependency>
-            <groupId>dev.mccue</groupId>
-            <artifactId>feather</artifactId>
-            <version>2024.09.09.1</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.xerial</groupId>
-            <artifactId>sqlite-jdbc</artifactId>
-            <version>3.43.0.0</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.jspecify</groupId>
-            <artifactId>jspecify</artifactId>
-            <version>1.0.0</version>
-        </dependency>
-
-        <dependency>
-            <groupId>com.auth0</groupId>
-            <artifactId>java-jwt</artifactId>
-            <version>4.4.0</version>
         </dependency>
 
         <dependency>
@@ -172,6 +152,11 @@
                         <descriptor>src/main/assembly/distribution.xml</descriptor>
                     </descriptors>
                 </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.5.0</version>
             </plugin>
         </plugins>
     </build>
