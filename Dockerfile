@@ -4,7 +4,6 @@ COPY src src
 COPY pom.xml pom.xml
 
 RUN mvn clean package assembly:single
-RUN ls
 
 FROM amazoncorretto:23
 
