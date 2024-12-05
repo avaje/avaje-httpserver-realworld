@@ -88,7 +88,5 @@ $ docker build -t realworld .
 $ docker run realworld
 ```
 
-To develop locally you only need `docker compose up -d` then to open the project in your editor.
-
 The `.env` file for this project is committed to the repo. Note that in general this is a bad idea/practice, but the
-only secrets here are for the local database connection so its fine.
+only secrets here are for the local database connection so it's fine.
