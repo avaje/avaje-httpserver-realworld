@@ -12,10 +12,7 @@ import dev.mccue.jdk.httpserver.HttpExchanges;
 import dev.mccue.jdk.httpserver.json.JsonBody;
 import dev.mccue.jdk.httpserver.regexrouter.RegexRouter;
 import dev.mccue.jdk.httpserver.regexrouter.RouteParams;
-import dev.mccue.json.Json;
-import dev.mccue.json.JsonArray;
-import dev.mccue.json.JsonDecoder;
-import dev.mccue.json.JsonObject;
+import dev.mccue.json.*;
 import dev.mccue.urlparameters.UrlParameters;
 import org.intellij.lang.annotations.Language;
 import org.slf4j.Logger;
@@ -118,7 +115,7 @@ public final class RealWorldAPI {
         }
     }
 
-    @Route(methods = "POST", pattern = "/api/users")
+
     void registerHandler(HttpExchange exchange) throws IOException {
         var body = JsonBody.read(exchange, RegisterRequest::fromJson);
         try (var conn = db.getConnection()) {
@@ -210,7 +207,6 @@ public final class RealWorldAPI {
         }
     }
 
-    @Route(methods = "POST", pattern = "/api/users/login")
     void loginHandler(HttpExchange exchange) throws IOException {
         var body = JsonBody.read(exchange, LoginRequest::fromJson);
 
@@ -271,7 +267,6 @@ public final class RealWorldAPI {
         }
     }
 
-    @Route(methods = "GET", pattern = "/api/user")
     void getCurrentUserHandler(HttpExchange exchange) throws IOException {
         var userId = getUserId(exchange);
         if (userId == null) {
@@ -329,7 +324,6 @@ public final class RealWorldAPI {
         }
     }
 
-    @Route(methods = "PUT", pattern = "/api/user")
     void updateUserHandler(HttpExchange exchange) throws IOException {
         var userId = getUserId(exchange);
         if (userId == null) {
@@ -412,7 +406,6 @@ public final class RealWorldAPI {
         }
     }
 
-    @Route(methods = "GET", pattern = "/api/profiles/(?<username>[a-zA-Z0-9-_]+)")
     void getProfileHandler(HttpExchange exchange) throws IOException {
         var userId = getUserId(exchange);
         var username = RouteParams.get(exchange)
@@ -455,7 +448,6 @@ public final class RealWorldAPI {
         }
     }
 
-    @Route(methods = "POST", pattern = "/api/profiles/(?<username>[a-zA-Z0-9-_]+)/follow")
     void followUserHandler(HttpExchange exchange) throws IOException {
         var userId = getUserId(exchange);
         if (userId == null) {
@@ -516,7 +508,6 @@ public final class RealWorldAPI {
         }
     }
 
-    @Route(methods = "DELETE", pattern = "/api/profiles/(?<username>[a-zA-Z0-9-_]+)/follow")
     void unfollowUserHandler(HttpExchange exchange) throws IOException {
         var userId = getUserId(exchange);
         if (userId == null) {
@@ -577,7 +568,6 @@ public final class RealWorldAPI {
         }
     }
 
-    @Route(methods = "GET", pattern = "/api/articles")
     void listArticlesHandler(HttpExchange exchange) throws IOException {
         var userId = getUserId(exchange);
         var urlParameters = UrlParameters.parse(exchange.getRequestURI());
@@ -676,7 +666,7 @@ public final class RealWorldAPI {
             int limit;
             try {
                 limit = Integer.parseInt(limitString);
-            } catch (NumberFormatException _) {
+            } catch (NumberFormatException __) {
                 HttpExchanges.sendResponse(
                         exchange,
                         422,
@@ -700,7 +690,7 @@ public final class RealWorldAPI {
             int offset;
             try {
                 offset = Integer.parseInt(offsetString);
-            } catch (NumberFormatException _) {
+            } catch (NumberFormatException __) {
                 HttpExchanges.sendResponse(
                         exchange,
                         422,
@@ -751,7 +741,6 @@ public final class RealWorldAPI {
         }
     }
 
-    @Route(methods = "GET", pattern = "/api/articles/feed")
     void feedArticlesHandler(HttpExchange exchange) throws IOException {
         var userId = getUserId(exchange);
         if (userId == null) {
@@ -820,7 +809,7 @@ public final class RealWorldAPI {
             int limit;
             try {
                 limit = Integer.parseInt(limitString);
-            } catch (NumberFormatException _) {
+            } catch (NumberFormatException __) {
                 HttpExchanges.sendResponse(
                         exchange,
                         422,
@@ -844,7 +833,7 @@ public final class RealWorldAPI {
             int offset;
             try {
                 offset = Integer.parseInt(offsetString);
-            } catch (NumberFormatException _) {
+            } catch (NumberFormatException __) {
                 HttpExchanges.sendResponse(
                         exchange,
                         422,
@@ -893,7 +882,6 @@ public final class RealWorldAPI {
         }
     }
 
-    @Route(methods = "GET", pattern = "/api/articles/(?<slug>[a-zA-Z0-9-_]+)")
     void getArticleHandler(HttpExchange exchange) throws IOException {
         var userId = getUserId(exchange);
         var slug = RouteParams.get(exchange).param("slug").orElseThrow();
@@ -998,7 +986,6 @@ public final class RealWorldAPI {
         return sb.toString();
     }
 
-    @Route(methods = "POST", pattern = "/api/articles")
     void createArticleHandler(HttpExchange exchange) throws IOException {
         var userId = getUserId(exchange);
         if (userId == null) {
@@ -1139,7 +1126,6 @@ public final class RealWorldAPI {
         }
     }
 
-    @Route(methods = "PUT", pattern = "/api/articles/(?<slug>[a-zA-Z0-9-_]+)")
     void updateArticleHandler(HttpExchange exchange) throws IOException {
         var userId = getUserId(exchange);
         if (userId == null) {
@@ -1265,7 +1251,6 @@ public final class RealWorldAPI {
         }
     }
 
-    @Route(methods = "DELETE", pattern = "/api/articles/(?<slug>[a-zA-Z0-9-_]+)")
     void deleteArticleHandler(HttpExchange exchange) throws IOException {
         var userId = getUserId(exchange);
         if (userId == null) {
@@ -1306,7 +1291,6 @@ public final class RealWorldAPI {
         }
     }
 
-    @Route(methods = "POST", pattern = "/api/articles/(?<slug>[a-zA-Z0-9-_]+)/comments")
     void addCommentsToArticleHandler(HttpExchange exchange) throws IOException {
         var userId = getUserId(exchange);
         if (userId == null) {
@@ -1401,7 +1385,6 @@ public final class RealWorldAPI {
         }
     }
 
-    @Route(methods = "GET", pattern = "/api/articles/(?<slug>[a-zA-Z0-9-_]+)/comments")
     void getCommentsFromArticleHandler(HttpExchange exchange) throws IOException {
         var userId = getUserId(exchange);
         var slug = RouteParams.get(exchange).param("slug").orElseThrow();
@@ -1464,7 +1447,6 @@ public final class RealWorldAPI {
         }
     }
 
-    @Route(methods = "DELETE", pattern = "/api/articles/(?<slug>[a-zA-Z0-9-_]+)/comments/(?<commentId>[a-zA-Z0-9-_]+)")
     void deleteCommentHandler(HttpExchange exchange) throws IOException {
         var userId = getUserId(exchange);
         if (userId == null) {
@@ -1517,7 +1499,6 @@ public final class RealWorldAPI {
         }
     }
 
-    @Route(methods = "POST", pattern = "/api/articles/(?<slug>[a-zA-Z0-9-_]+)/favorite")
     void favoriteArticleHandler(HttpExchange exchange) throws IOException {
         var userId = getUserId(exchange);
         if (userId == null) {
@@ -1623,7 +1604,6 @@ public final class RealWorldAPI {
         }
     }
 
-    @Route(methods = "DELETE", pattern = "/api/articles/(?<slug>[a-zA-Z0-9-_]+)/favorite")
     void unfavoriteArticleHandler(HttpExchange exchange) throws IOException {
         var userId = getUserId(exchange);
         if (userId == null) {
@@ -1729,7 +1709,6 @@ public final class RealWorldAPI {
         }
     }
 
-    @Route(methods = "GET", pattern = "/api/tags")
     void getTagsHandler(HttpExchange exchange) throws IOException {
         try (var conn = db.getConnection();
              var stmt = conn.prepareStatement("""
@@ -1755,7 +1734,6 @@ public final class RealWorldAPI {
         }
     }
 
-    @Route(methods = "OPTIONS", pattern = "/api/.+")
     void corsHandler(HttpExchange exchange) throws IOException {
         var headers = exchange.getResponseHeaders();
         headers.put("Access-Control-Allow-Origin", List.of("*"));
@@ -1768,24 +1746,26 @@ public final class RealWorldAPI {
     }
 
     public void register(RegexRouter.Builder builder) {
-        for (var method : this.getClass().getDeclaredMethods()) {
-            var route = method.getAnnotation(Route.class);
-            if (route != null) {
-                HttpHandler handler = exchange -> {
-                    try {
-                        method.invoke(this, exchange);
-                    } catch (InvocationTargetException e) {
-                        throw new RuntimeException(e);
-                    } catch (IllegalAccessException e) {
-                        throw new IllegalStateException(e);
-                    }
-                };
-                builder.route(
-                        Arrays.asList(route.methods()),
-                        Pattern.compile(route.pattern()),
-                        handler
-                );
-            }
-        }
+        builder
+                .post("/api/users", this::registerHandler)
+                .post("/api/users/login", this::loginHandler)
+                .get("/api/user", this::getCurrentUserHandler)
+                .put("/api/user", this::updateUserHandler)
+                .get("/api/profiles/(?<username>[a-zA-Z0-9-_]+)", this::getProfileHandler)
+                .post("/api/profiles/(?<username>[a-zA-Z0-9-_]+)/follow", this::followUserHandler)
+                .delete("/api/profiles/(?<username>[a-zA-Z0-9-_]+)/follow", this::unfollowUserHandler)
+                .get("/api/articles", this::listArticlesHandler)
+                .get("/api/articles/feed", this::feedArticlesHandler)
+                .get("/api/articles/(?<slug>[a-zA-Z0-9-_]+)", this::getArticleHandler)
+                .post("/api/articles", this::createArticleHandler)
+                .put("/api/articles/(?<slug>[a-zA-Z0-9-_]+)", this::updateArticleHandler)
+                .delete("/api/articles/(?<slug>[a-zA-Z0-9-_]+)", this::deleteArticleHandler)
+                .post("/api/articles/(?<slug>[a-zA-Z0-9-_]+)/comments", this::addCommentsToArticleHandler)
+                .get("/api/articles/(?<slug>[a-zA-Z0-9-_]+)/comments", this::getCommentsFromArticleHandler)
+                .delete("/api/articles/(?<slug>[a-zA-Z0-9-_]+)/comments/(?<commentId>[a-zA-Z0-9-_]+)", this::deleteCommentHandler)
+                .post("/api/articles/(?<slug>[a-zA-Z0-9-_]+)/favorite", this::favoriteArticleHandler)
+                .delete("/api/articles/(?<slug>[a-zA-Z0-9-_]+)/favorite", this::unfavoriteArticleHandler)
+                .get("/api/tags", this::getTagsHandler)
+                .options("/api/.+", this::corsHandler);
     }
 }
