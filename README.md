@@ -30,9 +30,21 @@ Then, serving specific tasks:
 * [bcrypt](https://github.com/patrickfav/bcrypt) for password salt and hashing
 * [org.slf4j](https://github.com/qos-ch/slf4j) as a logging facade
 
-Almost all the code is contained in the `RealWorldAPI` class. If any of the choices made here offend your sensibilities
+Almost all the code is contained in the [`RealWorldAPI`](https://github.com/bowbahdoe/jdk-httpserver-realworld/blob/main/src/main/java/dev/mccue/jdk/httpserver/realworld/RealWorldAPI.java) class. If any of the choices made here offend your sensibilities
 I encourage forking and showing the way you would prefer it be done. If you think something is done in a subpar way or
 is otherwise objectively broken please open an issue.
+
+Specifically, I would encourage folks to try and
+
+* Split up the `RealWorldAPI` class. Where are the natural boundaries?
+* Try using their database abstraction of choice. What would this look like with `Hibernate`, `JOOQ`, or `JDBI`? Would there be fewer or more round trips to the database?
+* Try using their JSON library of choice. 
+* Try to do the whole persistence/service/etc. split. Does that make things better?
+* Add unit tests. For this exact thing there are already API tests I was able to just use, but how would testing look with JUnit?
+* etc.
+
+I personally see a lot of areas for improvement once string templates are real. Counting `?`s in big queries is maybe the biggest
+remaining "raw" JDBC shortcoming.
 
 # Getting started
 
