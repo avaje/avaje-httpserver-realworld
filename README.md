@@ -2,10 +2,6 @@
 
 > ### JDK HTTP Server codebase containing real world examples (CRUD, auth, advanced patterns, etc) that adheres to the [RealWorld](https://github.com/gothinkster/realworld) spec and API.
 
-
-### [Demo](https://demo.realworld.io/)&nbsp;&nbsp;&nbsp;&nbsp;[RealWorld](https://github.com/gothinkster/realworld)
-
-
 This codebase was created to demonstrate a fully fledged fullstack application built with the JDK HTTP Server including CRUD operations, authentication, routing, pagination, and more.
 
 For more information on how to this works with other frontends/backends, head over to the [RealWorld](https://github.com/gothinkster/realworld) repo.
@@ -43,14 +39,38 @@ is otherwise objectively broken please open an issue.
 ## Prerequisites
 
 * Java 22 or above
+* SDKMan
 * Docker
 
 ## Usage
 
-To just run the server
+First, start up postgres
 
 ```
 $ docker compose up -d
+```
+
+Then install MyBatis Migrations. This is currently easiest to do with SDKMan.
+
+```
+$ sdk install mybatis
+```
+
+Apply the migrations to the database
+
+```
+$ cd migrations
+$ migrate up
+$ cd ..
+```
+
+Then to run the server either 
+
+* open the project in your editor
+* run it through maven (`./mvnw exec:java -Dexec.mainClass="dev.mccue.jdk.httpserver.realworld.Main"`)
+* run it through docker
+
+```
 $ docker build -t realworld .
 $ docker run realworld
 ```
