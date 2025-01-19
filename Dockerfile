@@ -1,12 +1,39 @@
-FROM maven:3.9.9-amazoncorretto-23 AS build
+FROM amazoncorretto:23 AS builder
 
-COPY src src
-COPY pom.xml pom.xml
+RUN dnf install -y binutils
 
-RUN mvn clean package assembly:single
+RUN jlink \
+    #when it comes to jlink, one bad apple spoils the bunch.
+    #if postgres was modular, then I could have let jlink take care of finding the JDK modules
+    #but since it's not, I have to determine and specify all the modules I need
+    --add-modules java.base,java.instrument,java.logging,java.management,java.naming,java.net.http,java.sql,jdk.httpserver \
+    --strip-debug \
+    --no-header-files \
+    --no-man-pages \
+    --output /jre
 
-FROM amazoncorretto:23
+    # If all my dependencies were modular, I would have done this
+    # COPY /target/modules /modules
+    # RUN jlink -p /modules \
+    # --add-modules avaje.realworld \
+    # --strip-debug \
+    # --no-header-files \
+    # --no-man-pages \
+    # --output /jre
 
-COPY --from=build target/server-distribution ./server-distribution
+FROM gcr.io/distroless/cc-debian12
 
-ENTRYPOINT ["sh", "server-distribution/bin/server.sh"]
+COPY --from=builder /jre /jre
+# COPY native lib for java
+COPY --from=builder /usr/lib64/libz.so.1 /lib/x86_64-linux-gnu/libz.so.1
+# for ARM
+# COPY --from=builder /usr/lib64/libz.so.1 /lib/aarch64-linux-gnu/libz.so.1
+
+COPY /target/modules /modules
+
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=70.0 -Duser.timezone=\"America/New_York\""
+
+ENTRYPOINT ["/jre/bin/java","-p", "/modules", "-m", "avaje.realworld"]
+
+# If all my dependencies were modular, I would have done this
+# ENTRYPOINT ["/jre/bin/java", "-m", "avaje.realworld"]
