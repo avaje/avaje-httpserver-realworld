@@ -1,10 +1,8 @@
-import io.avaje.http.api.Path;
 import io.avaje.inject.spi.InjectExtension;
 import io.avaje.jsonb.spi.JsonbExtension;
 import io.avaje.validation.spi.ValidationExtension;
 import io.ebean.config.EntityClassRegister;
 
-@Path("/api")
 module avaje.realworld {
   /// jwt validation
   requires com.auth0.jwt;

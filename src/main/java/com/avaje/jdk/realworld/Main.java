@@ -21,6 +21,7 @@ public final class Main {
                 ctx.header("Access-Control-Allow-Origin", "*")
                     .header("Access-Control-Allow-Headers", "*"))
         .port(Config.getInt("server.port"))
+        .contextPath(Config.get("server.contextPath", "/api"))
         .start()
         .onShutdown(beans::close);
   }
