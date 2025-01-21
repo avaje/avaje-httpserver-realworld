@@ -6,28 +6,29 @@ This codebase was created to demonstrate a lightweight fully modular backend app
 
 For more information on how this works with other frontends/backends, head to the [RealWorld](https://github.com/gothinkster/realworld) repo.
 
+It is deployed to https://avaje-httpserver-realworld.onrender.com
+
 # How it works
 
-This is built up of a few components. Primarily
+This is built up of a few components. Primarily:
 
-* The [`jdk.httpserver`](https://docs.oracle.com/en/java/javase/21/docs/api/jdk.httpserver/module-summary.html) module as the HTTP Server
-* [Ebean ORM](https://ebean.io) as the ORM
-* [Postgresql](https://postgresql.org) for the database
+* The [`jdk.httpserver`](https://docs.oracle.com/en/java/javase/21/docs/api/jdk.httpserver/module-summary.html) module as the HTTP Server implementation.
+* [Avaje Jex](https://avaje.io/jex) to configure and provide routing abstraction over the `jdk.httpserver`. This is the API programmed against
+* [Ebean ORM](https://ebean.io) for the Connection Pooling and ORM
+* [Postgresql](https://postgresql.org) as the database
 * [RainbowGum](https://github.com/jstachio/rainbowgum) for logging
 
 Then, serving specific tasks:
 
-* [Avaje Jex](https://avaje.io/jex) for providing routing abstractions over the `jdk.httpserver`.
 * [Avaje Jsonb](https://avaje.io/jsonb) for reading and writing JSON
 * [Avaje HTTP Server](https://avaje.io/http-server) for generating routing code for Jex from Jax-RS style controllers
 * [Avaje Inject](https://avaje.io/inject) for Dependency Injection
 * [Avaje Config](https://avaje.io/config) for reading configuration files
 * [Avaje Validation](https://avaje.io/validator) for bean validation
-* [java-jwt](https://github.com/auth0/java-jwt) for JWT token validation
 * [dev.mccue.jdbc](https://github.com/bowbahdoe/jdbc) for `SQLFragment`
+* [java-jwt](https://github.com/auth0/java-jwt) for JWT token validation
 * [org.slf4j](https://github.com/qos-ch/slf4j) as a logging facade
 * [slugify](https://github.com/slugify/slugify) for turning text into a url sage slug
-
 
 # Getting started
 
@@ -52,7 +53,7 @@ $ cd migrations
 $ migrate up
 $ cd ..
 ```
-### 3. run the server.
+### 3. Run the server
 
 You can either 
 
