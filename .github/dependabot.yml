@@ -3,7 +3,7 @@ updates:
   - package-ecosystem: "maven"
     directory: "/"
     schedule:
-      interval: monthly
+      cron: 0 0 1 * *
     open-pull-requests-limit: 10
     groups:
       dependencies:
@@ -16,7 +16,7 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: monthly
+      cron: 0 0 1 * *
     open-pull-requests-limit: 5
     commit-message:
       prefix: "[workflow]"
