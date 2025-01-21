@@ -1,6 +1,13 @@
-FROM amazoncorretto:23 AS builder
+FROM maven:3.9.9-amazoncorretto-23 AS builder
 
-RUN dnf install -y binutils
+WORKDIR /build
+
+COPY pom.xml /build/pom.xml
+RUN mvn dependency:resolve && dnf install -y binutils
+
+COPY src /build/src
+
+RUN mvn clean package
 
 RUN jlink \
     #when it comes to jlink, one bad apple spoils the bunch.
@@ -29,7 +36,7 @@ COPY --from=builder /usr/lib64/libz.so.1 /lib/x86_64-linux-gnu/libz.so.1
 # for ARM
 # COPY --from=builder /usr/lib64/libz.so.1 /lib/aarch64-linux-gnu/libz.so.1
 
-COPY /target/modules /modules
+COPY --from=builder /build/target/modules /modules
 
 ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=70.0 -Duser.timezone=\"America/New_York\""
 
