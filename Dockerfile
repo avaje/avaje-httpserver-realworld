@@ -3,7 +3,7 @@ FROM maven:3.9.9-amazoncorretto-23 AS builder
 WORKDIR /build
 
 COPY pom.xml /build/pom.xml
-RUN mvn dependency:resolve && dnf install -y binutils
+RUN mvn verify --fail-never && dnf install -y binutils
 
 COPY src /build/src
 
