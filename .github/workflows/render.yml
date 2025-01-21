@@ -8,9 +8,25 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy to production
-        uses: johnbeynon/render-deploy-action@v0.0.8
-        with:
+    - uses: actions/checkout@v4
+    - name: Set up Java
+      uses: oracle-actions/setup-java@v1
+      with:
+        website: jdk.java.net
+        release: GA
+    - name: Maven cache
+      uses: actions/cache@v4
+      env:
+        cache-name: maven-cache
+      with:
+        path:
+          ~/.m2
+        key: build-${{ env.cache-name }}
+    - name: Build with Maven
+      run: mvn --version && mvn package
+    - name: Deploy to production
+      uses: johnbeynon/render-deploy-action@v0.0.8
+      with:
           service-id: ${{ secrets.RENDER_SERVICE }}
           api-key: ${{ secrets.RENDER_TOKEN }}
           wait-for-success: true
