@@ -24,8 +24,9 @@ Then, serving specific tasks:
 * [Avaje Config](https://avaje.io/config) for reading configuration files
 * [Avaje Validation](https://avaje.io/validator) for bean validation
 * [java-jwt](https://github.com/auth0/java-jwt) for JWT token validation
-* [slugify](https://github.com/slugify/slugify) for turning text into a url sage slug
+* [dev.mccue.jdbc](https://github.com/bowbahdoe/jdbc) for `SQLFragment`
 * [org.slf4j](https://github.com/qos-ch/slf4j) as a logging facade
+* [slugify](https://github.com/slugify/slugify) for turning text into a url sage slug
 
 
 # Getting started
@@ -33,32 +34,27 @@ Then, serving specific tasks:
 ## Prerequisites
 
 * Java 21 or above
-* SDKMan
+* MyBatis (can be installed with [SDKMAN](https://sdkman.io/sdks#mybatis))
 * Docker
 
 ## Usage
 
-First, start up postgres
+### 1. Start up postgres container
 
 ```
 $ docker compose up -d
 ```
 
-Then install MyBatis Migrations. This is currently easiest to do with SDKMan.
-
-```
-$ sdk install mybatis
-```
-
-Apply the migrations to the database
+### 2. Apply the migrations to the database
 
 ```
 $ cd migrations
 $ migrate up
 $ cd ..
 ```
+### 3. run the server.
 
-Then to run the server either 
+You can either 
 
 * open the project in your editor
 * run it through terminal (`./run.sh"`)
@@ -69,5 +65,9 @@ $ docker build -t real .
 $ docker run real
 ```
 
+You can then use the [provided postman collection](https://github.com/avaje/avaje-httpserver-realworld/blob/main/Conduit.postman_collection.json) to send requests.
+
 The `.env` file for this project is committed to the repo. Note that in general this is a bad idea/practice, but the
 only secrets here are for the local database connection so it's fine.
+
+
