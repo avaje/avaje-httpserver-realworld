@@ -11,12 +11,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 @Controller
-public class AuthFilter {
-  private static final Logger LOG = LoggerFactory.getLogger(AuthFilter.class);
+public class JWTAuthFilter {
+  private static final Logger LOG = LoggerFactory.getLogger(JWTAuthFilter.class);
 
   private final TokenService tokenService;
 
-  AuthFilter(TokenService tokenService) {
+  JWTAuthFilter(TokenService tokenService) {
 
     this.tokenService = tokenService;
   }
@@ -24,7 +24,7 @@ public class AuthFilter {
   @Filter
   void authFilter(Context ctx, FilterChain chain) throws Exception {
 
-    if (ctx.routeRoles().contains(AppRole.ANYONE)) {
+    if (!ctx.routeRoles().contains(AppRole.JWT)) {
 
       chain.proceed();
       return;

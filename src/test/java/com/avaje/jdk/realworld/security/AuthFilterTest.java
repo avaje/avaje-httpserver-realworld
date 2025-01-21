@@ -15,7 +15,7 @@ class AuthFilterTest {
   private final TokenService mockDb = mock(TokenService.class);
 
   Context context = mock(Context.class);
-  AuthFilter filter = new AuthFilter(mockDb);
+  JWTAuthFilter filter = new JWTAuthFilter(mockDb);
 
   @BeforeEach
   void setup() {
