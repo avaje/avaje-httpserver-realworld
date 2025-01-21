@@ -42,6 +42,9 @@ module avaje.realworld {
   requires static org.mockito;
   requires static io.avaje.spi;
 
+  exports com.avaje.jdk.realworld.models;
+  exports com.avaje.jdk.realworld.models.entities;
+
   provides EntityClassRegister with
       com.avaje.jdk.realworld.models.entities.EbeanEntityRegister;
   provides io.ebean.config.DatabaseConfigProvider with

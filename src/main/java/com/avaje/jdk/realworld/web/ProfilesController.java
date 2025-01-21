@@ -10,7 +10,6 @@ import io.avaje.http.api.Get;
 import io.avaje.http.api.Post;
 import io.avaje.jex.Context;
 import io.ebean.DB;
-import io.ebean.annotation.Transactional;
 
 @Roles(AppRole.JWT)
 @Controller("/profiles")
@@ -45,13 +44,14 @@ public final class ProfilesController {
         .findOne();
   }
 
-  @Transactional
   @Post("/{username}/follow")
   ProfileResponse followUserHandler(Context ctx, String username) {
 
-    var userId = ctx.attribute(USER_ID);
-    DB.sqlUpdate(
-            """
+    try (var txn = DB.beginTransaction()) {
+
+      var userId = ctx.attribute(USER_ID);
+      DB.sqlUpdate(
+              """
             INSERT INTO realworld.follow(from_user_id, to_user_id)
             VALUES (?, (
                 SELECT id
@@ -60,9 +60,10 @@ public final class ProfilesController {
             ))
             ON CONFLICT DO NOTHING
             """)
-        .setParameter(userId)
-        .setParameter(username)
-        .execute();
+          .setParameter(userId)
+          .setParameter(username)
+          .execute();
+    }
 
     return new ProfileResponse(getProfile(ctx, username));
   }
