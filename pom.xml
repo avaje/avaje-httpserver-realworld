@@ -100,7 +100,7 @@
     <dependency>
       <groupId>io.avaje</groupId>
       <artifactId>avaje-inject-test</artifactId>
-      <scope>provided</scope>
+      <scope>test</scope>
     </dependency>
     <!-- Annotation processors-->
     <dependency>
