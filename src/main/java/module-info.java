@@ -37,7 +37,6 @@ module avaje.realworld {
   requires io.avaje.jsonb.plugin;
   /// jdk.httpserver wrapper
   requires io.avaje.jex;
-  requires static org.mockito;
   requires static io.avaje.spi;
 
   exports com.avaje.jdk.realworld.models;
