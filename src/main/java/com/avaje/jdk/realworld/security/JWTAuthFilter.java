@@ -4,8 +4,8 @@ import com.avaje.jdk.realworld.exception.AppError;
 import com.avaje.jdk.realworld.web.service.TokenService;
 import io.avaje.http.api.Controller;
 import io.avaje.http.api.Filter;
-import io.avaje.jex.Context;
-import io.avaje.jex.HttpFilter.FilterChain;
+import io.avaje.jex.http.Context;
+import io.avaje.jex.http.HttpFilter.FilterChain;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,7 +22,7 @@ public class JWTAuthFilter {
   }
 
   @Filter
-  void authFilter(Context ctx, FilterChain chain) throws Exception {
+  void authFilter(Context ctx, FilterChain chain) {
 
     if (!ctx.routeRoles().contains(AppRole.JWT)) {
 

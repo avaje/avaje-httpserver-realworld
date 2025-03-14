@@ -7,7 +7,7 @@ import io.avaje.jex.Routing.HttpService;
 import io.avaje.jex.core.json.JsonbJsonService;
 import io.avaje.jsonb.Jsonb;
 
-public final class Main {
+public final class AvajeRealWorldApplication {
 
   public static void main(String[] args) {
     var beans = BeanScope.builder().build();

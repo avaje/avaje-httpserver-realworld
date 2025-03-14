@@ -8,7 +8,7 @@ import io.avaje.http.api.Controller;
 import io.avaje.http.api.Delete;
 import io.avaje.http.api.Get;
 import io.avaje.http.api.Post;
-import io.avaje.jex.Context;
+import io.avaje.jex.http.Context;
 import io.ebean.DB;
 
 @Roles(AppRole.JWT)

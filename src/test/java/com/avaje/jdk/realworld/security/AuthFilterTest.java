@@ -5,7 +5,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 
 import com.avaje.jdk.realworld.web.service.TokenService;
-import io.avaje.jex.Context;
+import io.avaje.jex.http.Context;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

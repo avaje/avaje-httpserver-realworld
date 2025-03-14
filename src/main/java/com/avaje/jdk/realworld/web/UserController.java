@@ -19,7 +19,7 @@ import io.avaje.http.api.Get;
 import io.avaje.http.api.Post;
 import io.avaje.http.api.Put;
 import io.avaje.http.api.Valid;
-import io.avaje.jex.Context;
+import io.avaje.jex.http.Context;
 import io.avaje.jex.http.HttpResponseException;
 import io.ebean.DB;
 import io.ebean.DuplicateKeyException;
