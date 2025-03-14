@@ -16,6 +16,9 @@
     <maven.compiler.release>23</maven.compiler.release>
     <maven.compiler.proc>full</maven.compiler.proc>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <avaje.validator.version>2.8</avaje.validator.version>
+    <avaje.inject.version>11.3-RC1</avaje.inject.version>
+    <avaje.jsonb.version>3.1-RC3</avaje.jsonb.version>
   </properties>
   
   <dependencies>
