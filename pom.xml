@@ -7,7 +7,7 @@
     <artifactId>avaje-jex-parent</artifactId>
     <version>3.0-RC22</version>
   </parent>
-  
+
   <groupId>com.avaje</groupId>
   <artifactId>avaje-jex-realworld</artifactId>
   <version>1.0-SNAPSHOT</version>
@@ -16,13 +16,10 @@
     <maven.compiler.release>23</maven.compiler.release>
     <maven.compiler.proc>full</maven.compiler.proc>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <avaje.validator.version>2.8</avaje.validator.version>
-    <avaje.inject.version>11.3-RC1</avaje.inject.version>
-    <avaje.jsonb.version>3.1-RC3</avaje.jsonb.version>
   </properties>
-  
+
   <dependencies>
- 
+
     <dependency>
       <groupId>com.auth0</groupId>
       <artifactId>java-jwt</artifactId>
@@ -74,6 +71,10 @@
       <groupId>io.avaje</groupId>
       <artifactId>avaje-jex</artifactId>
     </dependency>
+    <dependency>
+      <groupId>io.avaje</groupId>
+      <artifactId>avaje-jex-static-content</artifactId>
+    </dependency>
 
     <dependency>
       <groupId>io.avaje</groupId>
@@ -105,7 +106,7 @@
       <artifactId>avaje-inject-test</artifactId>
       <scope>test</scope>
     </dependency>
-    
+
     <!-- Annotation processors-->
     <dependency>
       <groupId>io.avaje</groupId>
@@ -189,14 +190,14 @@
       <plugin>
         <groupId>io.ebean</groupId>
         <artifactId>ebean-maven-plugin</artifactId>
-          <executions>
-            <execution>
-              <goals>
-                <goal>enhance</goal>
-                <goal>testEnhance</goal>
-              </goals>
-            </execution>
-          </executions>
+        <executions>
+          <execution>
+            <goals>
+              <goal>enhance</goal>
+              <goal>testEnhance</goal>
+            </goals>
+          </execution>
+        </executions>
       </plugin>
     </plugins>
   </build>

@@ -41,6 +41,7 @@ module avaje.realworld {
   requires io.avaje.jsonb.plugin;
   /// jdk.httpserver wrapper
   requires io.avaje.jex;
+  requires io.avaje.jex.staticcontent;
   requires static io.avaje.spi;
 
   provides EntityClassRegister with
