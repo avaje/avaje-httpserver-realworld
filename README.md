@@ -34,7 +34,7 @@ Then, serving specific tasks:
 
 ## Prerequisites
 
-* Java 21 or above
+* Java 24 or above
 * MyBatis (can be installed with [SDKMAN](https://sdkman.io/sdks#mybatis))
 * Docker
 
