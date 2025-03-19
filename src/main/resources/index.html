@@ -127,33 +127,40 @@
 <body>
     <header>
         <h1>Avaje RealWorld Example</h1>
-        <p>this is cinema</p>
+        <p>Avaje + JDK Httpserver Showcase</p>
     </header>
 
     <div class="container">
         <section>
             <h2>Get Started Today</h2>
-            <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam in dui mauris. Vivamus hendrerit arcu sed erat molestie vehicula.</p>
-            <a href="#" class="cta-button">Learn More</a>
+            <p>This website was created using various libraries to adhere to the <a href="https://github.com/gothinkster/realworld">RealWorld</a> spec and API</p>
+            <p>To use this api, call the <a href="/api">/api</a> endpoints</p>
         </section>
 
+        <h2>Technologies</h2>
         <section class="features">
+            
             <div class="feature-card">
-                <div class="feature-icon">🚀</div>
-                <h3>Fast &amp; Reliable</h3>
-                <p>Experience lightning-fast performance with our optimized infrastructure. Our platform is designed to handle high loads with ease.</p>
+                <img width="50" src=" https://static-00.iconduck.com/assets.00/java-icon-1511x2048-6ikx8301.png"></img>
+                <h3><a href="https://docs.oracle.com/en/java/javase/24/docs/api/jdk.httpserver/module-summary.html">jdk.httpserver</a></h3>
+                <p>The JDK's humble built-in httpserver is the engine that serves requests. With virtual threads you can achieve decent performance</p>
+            </div>
+            <div class="feature-card">
+                <img width="50" src="https://avatars.githubusercontent.com/u/19895957?s=200&v=4"></img>
+                <h3><a href="https://avaje.io/">Avaje</a></h3>
+                <p>Avaje is a collection of independent libraries that provides the <em>jdk.httpserver</em> api wrapper as well as the dependency injection, json and bean validation. It uses annotation processing to make the libraries lightweight and free of reflection.</p>
+            </div>
+            
+            <div class="feature-card">
+                <img width="50" src="https://mvnrepository.com/img/a41cf61cd595641f9cbe54a23464ef82"></img>
+                <h3><a href="https://ebean.io/">Ebean ORM</a></h3>
+                <p>Ebean provides the connection pooling and ORM functionality. Though I mainly used the rowmapping functionality to send my own SQL queries and map the result.</p>
             </div>
 
             <div class="feature-card">
-                <div class="feature-icon">🛡️</div>
-                <h3>Secure</h3>
-                <p>Your data is always protected with industry-leading security measures. Rest easy knowing your information is safe.</p>
-            </div>
-
-            <div class="feature-card">
-                <div class="feature-icon">⚙️</div>
-                <h3>Customizable</h3>
-                <p>Tailor our platform to meet your specific needs with powerful customization options and flexible configurations.</p>
+                <img width="50" src="https://wiki.postgresql.org/images/thumb/a/a4/PostgreSQL_logo.3colors.svg/116px-PostgreSQL_logo.3colors.svg.png"></img>
+                <h3><a href="https://www.postgresql.org/">PostgreSQL</a></h3>
+                <p>The classic database that needs no introduction</p>
             </div>
         </section>
     </div>
