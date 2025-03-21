@@ -30,8 +30,7 @@ public final class AvajeRealWorldApplication {
                 ctx.header("Access-Control-Allow-Origin", "*")
                     .header("Access-Control-Allow-Headers", "*"))
         .plugin(staticContent)
-        .port(Config.getInt("server.port"))
-        .config(c -> c.host("localhost"))
+        .port(Config.getInt("PORT", 8080))
         .start()
         .onShutdown(beans::close);
   }
