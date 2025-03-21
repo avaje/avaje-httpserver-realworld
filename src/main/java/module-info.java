@@ -1,4 +1,10 @@
 import io.avaje.http.api.Path;
+import io.avaje.inject.spi.InjectExtension;
+import io.avaje.jsonb.spi.JsonbExtension;
+import io.avaje.validation.spi.ValidationExtension;
+import io.ebean.config.DatabaseConfigProvider;
+import io.ebean.config.EntityClassRegister;
+import io.ebean.config.LookupProvider;
 
 @Path("/api")
 module avaje.realworld {
@@ -37,4 +43,21 @@ module avaje.realworld {
   requires io.avaje.jex;
   requires io.avaje.jex.staticcontent;
   requires static io.avaje.spi;
+
+  provides EntityClassRegister with
+      com.avaje.jdk.realworld.models.entities.EbeanEntityRegister;
+  provides DatabaseConfigProvider with
+      com.avaje.jdk.realworld.security.Encryptor;
+  provides LookupProvider with
+      avaje.realworld.lookup.EbeanMethodLookup;
+
+  /// generated DI Classes
+  provides InjectExtension with
+      com.avaje.jdk.realworld.RealworldModule;
+
+  /// generated Json Classes
+  provides JsonbExtension with
+      com.avaje.jdk.realworld.jsonb.GeneratedJsonComponent;
+  provides ValidationExtension with
+      com.avaje.jdk.realworld.models.request.valid.GeneratedValidatorComponent;
 }
