@@ -31,6 +31,7 @@ public final class AvajeRealWorldApplication {
                     .header("Access-Control-Allow-Headers", "*"))
         .plugin(staticContent)
         .port(Config.getInt("server.port"))
+        .config(c -> c.host("localhost"))
         .start()
         .onShutdown(beans::close);
   }
