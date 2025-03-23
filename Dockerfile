@@ -1,4 +1,4 @@
-FROM maven:3.9.9-amazoncorretto-24 AS builder
+FROM amazoncorretto:24 AS builder
 
 WORKDIR /build
 
