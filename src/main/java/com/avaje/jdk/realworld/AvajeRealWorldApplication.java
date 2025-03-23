@@ -30,6 +30,7 @@ public final class AvajeRealWorldApplication {
                 ctx.header("Access-Control-Allow-Origin", "*")
                     .header("Access-Control-Allow-Headers", "*"))
         .plugin(staticContent)
+        // render.com port ENV variable
         .port(Config.getInt("PORT", 8080))
         .start()
         .onShutdown(beans::close);
