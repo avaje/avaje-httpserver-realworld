@@ -1,22 +1,9 @@
-FROM amazoncorretto:24 AS builder
-
-ENV MAVEN_HOME=/usr/share/maven
-
-COPY --from=maven:3.9.9-eclipse-temurin-17 ${MAVEN_HOME} ${MAVEN_HOME}
-
-RUN ln -s ${MAVEN_HOME}/bin/mvn /usr/bin/mvn
-
-ARG MAVEN_VERSION=3.9.9
-ARG USER_HOME_DIR="/root"
-ENV MAVEN_CONFIG="$USER_HOME_DIR/.m2"
-
-RUN dnf install -y binutils
+FROM maven:3.9.9-amazoncorretto-24 AS builder
 
 WORKDIR /build
 
 COPY pom.xml /build/pom.xml
-
-RUN mvn verify --fail-never
+RUN mvn verify --fail-never && dnf install -y binutils
 
 COPY src /build/src
 
