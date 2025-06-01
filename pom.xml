@@ -40,13 +40,13 @@
     <dependency>
       <groupId>dev.mccue</groupId>
       <artifactId>jdbc</artifactId>
-      <version>2025.03.09</version>
+      <version>2025.05.29</version>
     </dependency>
 
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter-engine</artifactId>
-      <version>5.12.2</version>
+      <version>5.13.0</version>
       <scope>test</scope>
     </dependency>
 
@@ -59,7 +59,7 @@
     <dependency>
       <groupId>org.postgresql</groupId>
       <artifactId>postgresql</artifactId>
-      <version>42.7.5</version>
+      <version>42.7.6</version>
     </dependency>
 
     <dependency>
@@ -148,7 +148,7 @@
       <plugin>
         <groupId>com.spotify.fmt</groupId>
         <artifactId>fmt-maven-plugin</artifactId>
-        <version>2.25</version>
+        <version>2.27</version>
         <executions>
           <execution>
             <goals>
