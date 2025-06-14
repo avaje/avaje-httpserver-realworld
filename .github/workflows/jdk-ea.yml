@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        java_version: [GA,EA] ## valhalla (fails javadoc)
+        java_version: [GA] ## valhalla (fails javadoc)
         os: [ubuntu-latest]
 
     steps:

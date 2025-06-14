@@ -12,6 +12,7 @@ import io.avaje.jsonb.Jsonb;
 public final class AvajeRealWorldApplication {
 
   public static void main(String[] args) {
+
     var beans = BeanScope.builder().build();
 
     var staticContent =
