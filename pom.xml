@@ -34,7 +34,7 @@
     <dependency>
       <groupId>io.jstach.rainbowgum</groupId>
       <artifactId>rainbowgum-slf4j</artifactId>
-      <version>0.8.1</version>
+      <version>0.8.2</version>
     </dependency>
 
     <dependency>
@@ -46,7 +46,7 @@
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter-engine</artifactId>
-      <version>5.13.2</version>
+      <version>5.13.4</version>
       <scope>test</scope>
     </dependency>
 
