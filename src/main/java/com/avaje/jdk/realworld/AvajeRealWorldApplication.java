@@ -5,7 +5,7 @@ import io.avaje.inject.BeanScope;
 import io.avaje.jex.Jex;
 import io.avaje.jex.Routing.HttpService;
 import io.avaje.jex.core.json.JsonbJsonService;
-import io.avaje.jex.staticcontent.ClassResourceLoader;
+import io.avaje.jex.spi.ClassResourceLoader;
 import io.avaje.jex.staticcontent.StaticContent;
 import io.avaje.jsonb.Jsonb;
 
